@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tarot Reading</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Georgia, serif; background: #0d0a1a; color: #e8d9c0; min-height: 100vh; padding: 2rem 1rem; }
+    h1 { text-align: center; font-size: 2rem; color: #c9a96e; margin-bottom: 0.25rem; }
+    .subtitle { text-align: center; color: #8b7355; margin-bottom: 2rem; font-size: 0.9rem; letter-spacing: 2px; text-transform: uppercase; }
+    .step { max-width: 700px; margin: 0 auto 2rem; background: #1a1428; border: 1px solid #3a2d52; border-radius: 12px; padding: 1.5rem; }
+    .step h2 { color: #c9a96e; font-size: 1.1rem; margin-bottom: 1rem; }
+    input[type=text], textarea {
+      width: 100%; background: #0d0a1a; border: 1px solid #3a2d52; color: #e8d9c0;
+      padding: 0.6rem 0.8rem; border-radius: 6px; font-size: 1rem; font-family: Georgia, serif;
+    }
+    textarea { resize: vertical; min-height: 80px; }
+    .spread-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; }
+    .spread-btn {
+      background: #1a1428; border: 1px solid #3a2d52; color: #e8d9c0;
+      padding: 0.75rem 0.5rem; border-radius: 8px; cursor: pointer;
+      font-family: Georgia, serif; font-size: 0.85rem; text-align: center; transition: all 0.2s;
+    }
+    .spread-btn:hover { border-color: #c9a96e; color: #c9a96e; }
+    .spread-btn.selected { background: #2d1f4a; border-color: #c9a96e; color: #c9a96e; }
+
+    /* ── face-down deck ── */
+    .deck-instruction { font-size: 0.85rem; color: #8b7355; margin-bottom: 1.25rem; font-style: italic; }
+    .deck-wrap { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+
+    .card-slot { width: 72px; height: 120px; perspective: 600px; cursor: pointer; }
+    .card-slot.picked { cursor: default; }
+    .card-inner {
+      width: 100%; height: 100%; position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.55s ease;
+    }
+    .card-slot.flipped .card-inner { transform: rotateY(180deg); }
+    .card-slot.reversed .card-inner { transform: rotateY(180deg) rotateZ(180deg); }
+
+    .card-face, .card-back {
+      position: absolute; width: 100%; height: 100%;
+      border-radius: 8px; backface-visibility: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* back of card — ornate purple */
+    .card-back {
+      background: #1e1035;
+      border: 1.5px solid #5a3d8a;
+      font-size: 1.6rem;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .card-back-pattern {
+      width: 52px; height: 88px;
+      border: 1px solid #3a2d62;
+      border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem;
+      color: #4a3472;
+    }
+    .card-slot:not(.picked):hover .card-back { border-color: #c9a96e; background: #251540; }
+    .card-slot:not(.picked):hover .card-back-pattern { border-color: #c9a96e; color: #c9a96e; }
+
+    /* front of card — revealed */
+    .card-face {
+      background: #12082a;
+      border: 1.5px solid #c9a96e;
+      transform: rotateY(180deg);
+      flex-direction: column;
+      padding: 6px;
+      text-align: center;
+    }
+    .card-face .card-number { font-size: 0.6rem; color: #8b7355; margin-bottom: 2px; }
+    .card-face .card-name { font-size: 0.62rem; color: #c9a96e; line-height: 1.3; font-weight: bold; }
+    .card-face .card-symbol { font-size: 1.5rem; margin: 4px 0; }
+    .card-face .card-suit { font-size: 0.55rem; color: #5a3d7a; text-transform: uppercase; letter-spacing: 1px; }
+    .card-face .reversed-tag { font-size: 0.5rem; color: #c96e6e; margin-top: 3px; }
+
+    /* selected tray */
+    .selected-tray { margin-top: 1.5rem; }
+    .tray-label { font-size: 0.8rem; color: #5a3d7a; margin-bottom: 0.6rem; }
+    .tray-cards { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tray-card {
+      background: #0d0a1a; border: 1px solid #3a2d52; border-radius: 8px;
+      padding: 0.4rem 0.7rem; font-size: 0.78rem; color: #e8d9c0;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .tray-card .pos-label { color: #8b7355; font-size: 0.7rem; }
+    .tray-card .rev-badge { color: #c96e6e; font-size: 0.65rem; }
+    .tray-card .remove-x { background: none; border: none; color: #5a3d5a; cursor: pointer; font-size: 0.9rem; padding: 0; }
+    .tray-card .remove-x:hover { color: #c9a96e; }
+
+    .submit-btn {
+      display: block; width: 100%; max-width: 700px; margin: 0 auto 2rem;
+      background: #2d1f4a; border: 1px solid #c9a96e; color: #c9a96e;
+      padding: 0.9rem; border-radius: 8px; font-size: 1.1rem; font-family: Georgia, serif;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .submit-btn:hover { background: #3d2a6a; }
+    .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .reading-box { max-width: 700px; margin: 0 auto; background: #1a1428; border: 1px solid #c9a96e; border-radius: 12px; padding: 1.5rem; }
+    .reading-box h2 { color: #c9a96e; margin-bottom: 1rem; }
+    .reading-cards-summary { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+    .card-tag { background: #0d0a1a; border: 1px solid #3a2d52; border-radius: 20px; padding: 0.2rem 0.7rem; font-size: 0.75rem; color: #8b7355; }
+    .reading-text { line-height: 1.8; white-space: pre-wrap; color: #e8d9c0; }
+    .loading { text-align: center; color: #8b7355; padding: 2rem; font-style: italic; }
+    .error { color: #c96e6e; background: #2a1418; border: 1px solid #5a2d2d; border-radius: 8px; padding: 1rem; max-width: 700px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+
+<h1>✦ Tarot Reading ✦</h1>
+<p class="subtitle">Seek and the cards shall answer</p>
+
+<div class="step">
+  <h2>1. Your name & question</h2>
+  <input type="text" id="userName" placeholder="Your name" style="margin-bottom:0.75rem" />
+  <textarea id="question" placeholder="What is your question for the cards?"></textarea>
+</div>
+
+<div class="step">
+  <h2>2. Choose a spread</h2>
+  <div class="spread-grid" id="spreadGrid"></div>
+</div>
+
+<div class="step" id="cardStep" style="display:none">
+  <h2>3. Draw your cards</h2>
+  <p class="deck-instruction" id="deckInstruction"></p>
+  <div class="deck-wrap" id="deckWrap"></div>
+  <div class="selected-tray" id="selectedTray" style="display:none">
+    <div class="tray-label">Cards drawn so far:</div>
+    <div class="tray-cards" id="trayCards"></div>
+  </div>
+</div>
+
+<button class="submit-btn" id="submitBtn" onclick="submitReading()" disabled>Generate Reading</button>
+<div id="result"></div>
+
+<script>
+const API = 'http://localhost:8000/api';
+const SUIT_SYMBOL = { wands: '🔥', cups: '🌊', swords: '💨', pentacles: '🌿', '': '✦' };
+let allCards = [];
+let spreads = [];
+let selectedSpread = null;
+let shuffledDeck = [];   // all 78 cards in random order, each with assigned slot index
+let selectedCards = [];  // [{card_id, card_name, is_reversed, slot_index}]
+
+async function init() {
+  const spreadGrid = document.getElementById('spreadGrid');
+  spreadGrid.innerHTML = '<span style="color:#8b7355;font-size:0.85rem">Loading…</span>';
+  try {
+    const [cardsRes, spreadsRes] = await Promise.all([fetch(`${API}/cards/`), fetch(`${API}/spreads/`)]);
+    if (!cardsRes.ok || !spreadsRes.ok) throw new Error(`API error: ${cardsRes.status} / ${spreadsRes.status}`);
+    allCards = await cardsRes.json();
+    spreads = await spreadsRes.json();
+    renderSpreads();
+  } catch (e) {
+    spreadGrid.innerHTML = `<span style="color:#c96e6e;font-size:0.85rem">✕ Could not reach backend: ${e.message}</span>`;
+  }
+}
+
+function renderSpreads() {
+  document.getElementById('spreadGrid').innerHTML = spreads.map(s => `
+    <button class="spread-btn" onclick="selectSpread('${s.key}')" id="spread-${s.key}">
+      ${s.label}<br><small style="color:#5a3d7a">${s.card_count} card${s.card_count > 1 ? 's' : ''}</small>
+    </button>`).join('');
+}
+
+function selectSpread(key) {
+  selectedSpread = spreads.find(s => s.key === key);
+  selectedCards = [];
+  document.querySelectorAll('.spread-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('spread-' + key).classList.add('selected');
+  document.getElementById('cardStep').style.display = 'block';
+  shuffleDeck();
+  renderDeck();
+  updateSubmitBtn();
+  document.getElementById('cardStep').scrollIntoView({ behavior: 'smooth' });
+}
+
+function shuffleDeck() {
+  shuffledDeck = [...allCards].sort(() => Math.random() - 0.5).map((c, i) => ({
+    ...c,
+    slotIndex: i,
+    is_reversed: Math.random() < 0.3,  // 30% chance reversed
+  }));
+}
+
+function renderDeck() {
+  const needed = selectedSpread.card_count;
+  document.getElementById('deckInstruction').textContent =
+    `The cards are face down and shuffled. Choose ${needed} that call to you — trust your intuition.`;
+
+  const wrap = document.getElementById('deckWrap');
+  wrap.innerHTML = shuffledDeck.map((c, i) => `
+    <div class="card-slot" id="slot-${i}" onclick="pickCard(${i})">
+      <div class="card-inner">
+        <div class="card-back">
+          <div class="card-back-pattern">✦</div>
+        </div>
+        <div class="card-face">
+          <div class="card-symbol">${SUIT_SYMBOL[c.suit] || '✦'}</div>
+          <div class="card-name">${c.name}</div>
+          <div class="card-suit">${c.arcana === 'major' ? 'Major Arcana' : c.suit}</div>
+          ${c.is_reversed ? '<div class="reversed-tag">↩ reversed</div>' : ''}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function pickCard(slotIndex) {
+  const card = shuffledDeck[slotIndex];
+  const slot = document.getElementById('slot-' + slotIndex);
+
+  // already picked this slot
+  if (slot.classList.contains('picked')) return;
+  // already have enough
+  if (selectedCards.length >= selectedSpread.card_count) return;
+
+  // flip the card
+  slot.classList.add('picked');
+  slot.classList.add(card.is_reversed ? 'reversed' : 'flipped');
+
+  selectedCards.push({
+    card_id: card.id,
+    card_name: card.name,
+    is_reversed: card.is_reversed,
+    slot_index: slotIndex,
+  });
+
+  renderTray();
+  updateSubmitBtn();
+}
+
+function unpickCard(slotIndex) {
+  const idx = selectedCards.findIndex(c => c.slot_index === slotIndex);
+  if (idx < 0) return;
+  selectedCards.splice(idx, 1);
+
+  const slot = document.getElementById('slot-' + slotIndex);
+  slot.classList.remove('picked', 'flipped', 'reversed');
+
+  renderTray();
+  updateSubmitBtn();
+}
+
+function renderTray() {
+  const tray = document.getElementById('selectedTray');
+  const trayCards = document.getElementById('trayCards');
+  if (selectedCards.length === 0) { tray.style.display = 'none'; return; }
+  tray.style.display = 'block';
+
+  const positions = selectedSpread ? getPositions(selectedSpread.key) : [];
+  trayCards.innerHTML = selectedCards.map((c, i) => `
+    <div class="tray-card">
+      <span class="pos-label">${positions[i] || (i + 1)}:</span>
+      <span>${c.card_name}</span>
+      ${c.is_reversed ? '<span class="rev-badge">↩ reversed</span>' : ''}
+      <button class="remove-x" onclick="unpickCard(${c.slot_index})" title="Put back">✕</button>
+    </div>`).join('');
+}
+
+function getPositions(key) {
+  const map = {
+    single: ['Your card'],
+    past_present_future: ['Past', 'Present', 'Future'],
+    celtic_cross: ['Present','Challenge','Past','Future','Above','Below','Advice','External','Hopes & fears','Outcome'],
+    relationship: ['You','Them','The connection','Challenge','Potential'],
+    career: ['Current situation','Obstacle','Advice','Likely outcome','Hidden factor'],
+  };
+  return map[key] || [];
+}
+
+function updateSubmitBtn() {
+  const ready = selectedSpread &&
+    selectedCards.length === selectedSpread.card_count &&
+    document.getElementById('userName').value.trim() &&
+    document.getElementById('question').value.trim();
+  document.getElementById('submitBtn').disabled = !ready;
+}
+
+document.getElementById('userName').addEventListener('input', updateSubmitBtn);
+document.getElementById('question').addEventListener('input', updateSubmitBtn);
+
+async function submitReading() {
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'The cards are speaking…';
+  document.getElementById('result').innerHTML = '<div class="loading">✦ Consulting the cards… this may take a moment ✦</div>';
+
+  try {
+    const res = await fetch(`${API}/reading/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_name: document.getElementById('userName').value.trim(),
+        question: document.getElementById('question').value.trim(),
+        spread_type: selectedSpread.key,
+        selected_cards: selectedCards.map(c => ({ card_id: c.card_id, is_reversed: c.is_reversed })),
+      }),
+    });
+    const data = await res.json();
+    document.getElementById('result').innerHTML = `
+      <div class="reading-box">
+        <h2>✦ Your Reading</h2>
+        <div class="reading-cards-summary">
+          ${data.cards.map(c => `<span class="card-tag">${c.position_label}: ${c.card_name}${c.is_reversed ? ' ↩' : ''}</span>`).join('')}
+        </div>
+        <div class="reading-text">${data.reading_text}</div>
+      </div>`;
+  } catch (e) {
+    document.getElementById('result').innerHTML = `<div class="error">Something went wrong: ${e.message}</div>`;
+  }
+  btn.textContent = 'Generate Reading';
+  btn.disabled = false;
+}
+
+init();
+</script>
+</body>
+</html>
