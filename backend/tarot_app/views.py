@@ -134,3 +134,17 @@ def _call_llm(prompt):
         messages=[{"role": "user", "content": prompt}],
     )
     return message.content[0].text
+
+
+class EvaluateReadingView(APIView):
+    def get(self, request, reading_id):
+        try:
+            reading = Reading.objects.prefetch_related(
+                'readingcard_set__card'
+            ).get(id=reading_id)
+        except Reading.DoesNotExist:
+            return Response({"error": "Reading not found"}, status=404)
+
+        from .evaluate import evaluate_reading
+        result = evaluate_reading(reading)
+        return Response(result)
