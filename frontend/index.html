@@ -309,7 +309,7 @@ async function submitReading() {
         <div class="reading-cards-summary">
           ${data.cards.map(c => `<span class="card-tag">${c.position_label}: ${c.card_name}${c.is_reversed ? ' ↩' : ''}</span>`).join('')}
         </div>
-        <div class="reading-text">${data.reading_text}</div>
+        <div class="reading-text">${data.reading_text.replace(/\s*\[(?:FROM_RECORD|FROM_QUERENT|GUIDELINE|INFERRED)\]/g, '')}</div>
       </div>`;
   } catch (e) {
     document.getElementById('result').innerHTML = `<div class="error">Something went wrong: ${e.message}</div>`;
