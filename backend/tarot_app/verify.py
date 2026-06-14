@@ -13,6 +13,8 @@ For reversed cards, also checks whether the reading incorrectly reads
 the card in an upright (positive) direction instead of shadow direction.
 """
 
+import re
+
 # ---------------------------------------------------------------------------
 # Synonym dictionary
 # Keys are canonical theme words from dariusk/corpora.
@@ -20,94 +22,184 @@ the card in an upright (positive) direction instead of shadow direction.
 # ---------------------------------------------------------------------------
 SYNONYMS = {
     # Core emotional / relational
-    "compassion":       ["compassion", "warmth", "care for others", "kindness", "caring"],
-    "empathy":          ["empathy", "emotional intelligence", "understanding others", "attuned"],
-    "insightfulness":   ["insightfulness", "intuition", "insight", "perceptive", "awareness"],
-    "spirituality":     ["spirituality", "spirit", "soul", "divine", "higher power", "sacred"],
-    "love":             ["love", "affection", "devotion", "romance", "loving"],
-    "passion":          ["passion", "desire", "longing", "ardor"],
-    "intuition":        ["intuition", "gut feeling", "inner knowing", "instinct"],
-    "instinct":         ["instinct", "intuition", "gut", "inner sense"],
+    "compassion":       ["compassion", "warmth", "care for others", "kindness",
+                         "caring", "tenderness", "gentle", "heart"],
+    "empathy":          ["empathy", "emotional intelligence", "understanding others",
+                         "attuned", "feel for", "emotionally aware", "in tune with"],
+    "insightfulness":   ["insightfulness", "intuition", "insight", "perceptive",
+                         "awareness", "discerning", "keen sense", "perceive"],
+    "spirituality":     ["spirituality", "spirit", "soul", "divine", "higher power",
+                         "sacred", "mystical", "transcendent", "universe", "cosmic"],
+    "love":             ["love", "affection", "devotion", "romance", "loving",
+                         "adoration", "cherish", "beloved"],
+    "passion":          ["passion", "desire", "longing", "ardor", "fervor",
+                         "enthusiasm", "zeal", "drive"],
+    "intuition":        ["intuition", "gut feeling", "inner knowing", "instinct",
+                         "inner voice", "sixth sense", "inner wisdom"],
+    "instinct":         ["instinct", "intuition", "gut", "inner sense",
+                         "natural knowing", "innate sense"],
 
     # Power / agency
-    "authority":        ["authority", "leadership", "control", "command", "power"],
-    "discipline":       ["discipline", "self-control", "restraint", "focus"],
-    "victory":          ["victory", "success", "triumph", "winning", "achievement"],
-    "advancement":      ["advancement", "progress", "moving forward", "growth"],
-    "capability":       ["capability", "ability", "skill", "competence", "talent"],
-    "empowerment":      ["empowerment", "strength", "confidence", "agency"],
+    "authority":        ["authority", "leadership", "control", "command", "power",
+                         "in charge", "dominion", "rule"],
+    "discipline":       ["discipline", "self-control", "restraint", "focus",
+                         "rigor", "structure", "commitment"],
+    "victory":          ["victory", "success", "triumph", "winning", "achievement",
+                         "accomplishment", "prevail", "overcome"],
+    "advancement":      ["advancement", "progress", "moving forward", "growth",
+                         "forward momentum", "step ahead", "leveling up"],
+    "capability":       ["capability", "ability", "skill", "competence", "talent",
+                         "gifted", "skilled", "proficient"],
+    "empowerment":      ["empowerment", "strength", "confidence", "agency",
+                         "self-assurance", "inner power", "reclaim"],
 
     # Change / transition
-    "ending":           ["ending", "conclusion", "closure", "completion", "finish"],
-    "transition":       ["transition", "change", "transformation", "shift", "passage"],
-    "upheaval":         ["upheaval", "disruption", "turmoil", "chaos", "shake-up"],
-    "demolition":       ["demolition", "destruction", "breakdown", "collapse", "tearing down"],
-    "deconstruction":   ["deconstruction", "dismantling", "breaking down", "undoing"],
-    "disaster":         ["disaster", "crisis", "catastrophe", "calamity", "shock"],
-    "destruction":      ["destruction", "ruin", "collapse", "devastation", "demolition"],
-    "revolution":       ["revolution", "radical change", "upheaval", "overhaul"],
+    "ending":           ["ending", "conclusion", "closure", "completion", "finish",
+                         "close", "finality", "wrapping up"],
+    "transition":       ["transition", "change", "transformation", "shift", "passage",
+                         "crossroads", "moving on", "new chapter"],
+    "upheaval":         ["upheaval", "disruption", "turmoil", "chaos", "shake-up",
+                         "unrest", "instability", "uprooted"],
+    "demolition":       ["demolition", "destruction", "breakdown", "collapse",
+                         "tearing down", "torn apart", "dismantled"],
+    "deconstruction":   ["deconstruction", "dismantling", "breaking down", "undoing",
+                         "unraveling", "taking apart"],
+    "disaster":         ["disaster", "crisis", "catastrophe", "calamity", "shock",
+                         "blow", "devastating", "wreckage"],
+    "destruction":      ["destruction", "ruin", "collapse", "devastation",
+                         "demolished", "shattered", "torn down"],
+    "revolution":       ["revolution", "radical change", "upheaval", "overhaul",
+                         "complete shift", "total transformation"],
 
     # Inner life
-    "solitude":         ["solitude", "alone", "isolation", "withdrawal", "retreat"],
-    "reflection":       ["reflection", "contemplation", "introspection", "meditation"],
-    "enlightenment":    ["enlightenment", "awakening", "revelation", "clarity", "insight"],
-    "sacrifice":        ["sacrifice", "letting go", "surrender", "giving up"],
-    "perspective":      ["perspective", "viewpoint", "outlook", "new angle"],
-    "suspension":       ["suspension", "pause", "waiting", "stillness", "limbo"],
+    "solitude":         ["solitude", "alone", "isolation", "withdrawal", "retreat",
+                         "by yourself", "inner quiet", "stepping away"],
+    "reflection":       ["reflection", "contemplation", "introspection", "meditation",
+                         "inner look", "self-examination", "pondering"],
+    "enlightenment":    ["enlightenment", "awakening", "revelation", "clarity",
+                         "insight", "illumination", "realization", "epiphany"],
+    "sacrifice":        ["sacrifice", "letting go", "surrender", "giving up",
+                         "release", "relinquish", "lay down"],
+    "perspective":      ["perspective", "viewpoint", "outlook", "new angle",
+                         "point of view", "fresh eyes", "see differently"],
+    "suspension":       ["suspension", "pause", "waiting", "stillness", "limbo",
+                         "on hold", "in between", "suspended"],
 
     # Fortune / material
-    "luck":             ["luck", "fortune", "chance", "fate", "serendipity"],
-    "cycles":           ["cycles", "patterns", "rhythm", "recurring", "turning point"],
-    "karma":            ["karma", "cause and effect", "what goes around", "consequence"],
-    "wealth":           ["wealth", "abundance", "prosperity", "riches", "financial"],
-    "health":           ["health", "wellbeing", "vitality", "physical", "wellness"],
-    "practicality":     ["practicality", "practical", "grounded", "realistic", "sensible"],
-    "receiving":        ["receiving", "accepting", "gift", "incoming", "receiving blessings"],
+    "luck":             ["luck", "fortune", "chance", "fate", "serendipity",
+                         "fortunate", "blessed", "windfall"],
+    "cycles":           ["cycles", "patterns", "rhythm", "recurring", "turning point",
+                         "wheel", "going around", "repeating"],
+    "karma":            ["karma", "cause and effect", "what goes around", "consequence",
+                         "reap what you sow", "universal law"],
+    "wealth":           ["wealth", "abundance", "prosperity", "riches", "financial",
+                         "affluence", "well-off", "materially"],
+    "health":           ["health", "wellbeing", "vitality", "physical", "wellness",
+                         "body", "healing", "medical"],
+    "practicality":     ["practicality", "practical", "grounded", "realistic",
+                         "sensible", "down to earth", "no-nonsense", "pragmatic"],
+    "receiving":        ["receiving", "accepting", "gift", "incoming",
+                         "receiving blessings", "open to receive", "welcomed"],
 
     # Guidance / knowledge
-    "guidance":         ["guidance", "direction", "mentorship", "advice", "counsel"],
-    "knowledge":        ["knowledge", "wisdom", "understanding", "learning", "insight"],
-    "revelation":       ["revelation", "discovery", "uncovering", "realization", "truth"],
-    "belief":           ["belief", "faith", "trust", "conviction", "spirituality"],
-    "balance":          ["balance", "equilibrium", "harmony", "fairness", "equal"],
-    "fairness":         ["fairness", "justice", "equity", "impartiality", "objectivity"],
-    "law":              ["law", "rules", "order", "legal", "justice"],
-    "objectivity":      ["objectivity", "neutral", "unbiased", "impartial", "fair"],
+    "guidance":         ["guidance", "direction", "mentorship", "advice", "counsel",
+                         "guide", "steer", "mentor"],
+    "knowledge":        ["knowledge", "wisdom", "understanding", "learning", "insight",
+                         "know", "grasp", "comprehend"],
+    "revelation":       ["revelation", "discovery", "uncovering", "realization",
+                         "truth", "unveiled", "coming to light"],
+    "belief":           ["belief", "faith", "trust", "conviction", "spirituality",
+                         "values", "principles", "creed"],
+    "balance":          ["balance", "equilibrium", "harmony", "fairness", "equal",
+                         "even", "centered", "stable"],
+    "fairness":         ["fairness", "justice", "equity", "impartiality",
+                         "objectivity", "fair", "just", "unbiased"],
+    "law":              ["law", "rules", "order", "legal", "justice",
+                         "regulation", "court", "binding"],
+    "objectivity":      ["objectivity", "neutral", "unbiased", "impartial", "fair",
+                         "detached", "balanced view"],
 
     # Character / virtue
-    "fertility":        ["fertility", "abundance", "creativity", "nurturing", "growth"],
-    "productivity":     ["productivity", "output", "results", "fruitful", "effective"],
-    "nurturing":        ["nurturing", "caring", "supportive", "motherly", "nourishing"],
-    "boldness":         ["boldness", "courage", "bravery", "daring", "confidence"],
-    "vitality":         ["vitality", "energy", "vigor", "aliveness", "life force"],
-    "experience":       ["experience", "wisdom", "knowledge", "seasoned", "background"],
-    "stillness":        ["stillness", "calm", "quiet", "peace", "tranquility"],
-    "withdrawal":       ["withdrawal", "retreat", "stepping back", "pulling away", "solitude"],
-    "freedom":          ["freedom", "liberation", "independence", "free", "unrestricted"],
-    "faith":            ["faith", "trust", "belief", "confidence", "hope"],
-    "innocence":        ["innocence", "purity", "naivety", "fresh start", "openness"],
+    "fertility":        ["fertility", "abundance", "creativity", "nurturing", "growth",
+                         "fruitful", "generative", "bloom"],
+    "productivity":     ["productivity", "output", "results", "fruitful", "effective",
+                         "efficient", "get things done"],
+    "nurturing":        ["nurturing", "caring", "supportive", "motherly", "nourishing",
+                         "foster", "cultivate", "tend to"],
+    "boldness":         ["boldness", "courage", "bravery", "daring", "confidence",
+                         "audacious", "fearless", "gutsy"],
+    "vitality":         ["vitality", "energy", "vigor", "aliveness", "life force",
+                         "vibrant", "alive", "lively"],
+    "experience":       ["experience", "wisdom", "knowledge", "seasoned", "background",
+                         "veteran", "track record", "history"],
+    "stillness":        ["stillness", "calm", "quiet", "peace", "tranquility",
+                         "serenity", "hush", "at rest"],
+    "withdrawal":       ["withdrawal", "retreat", "stepping back", "pulling away",
+                         "solitude", "recede", "pull back"],
+    "freedom":          ["freedom", "liberation", "independence", "free",
+                         "unrestricted", "unbound", "autonomous"],
+    "faith":            ["faith", "trust", "belief", "confidence", "hope",
+                         "conviction", "assurance", "rely on"],
+    "innocence":        ["innocence", "purity", "naivety", "fresh start", "openness",
+                         "untainted", "beginner", "new to"],
 
     # Shadow / negative (reversed themes)
-    "wallowing":        ["wallowing", "self-pity", "dwelling", "stuck in emotion"],
-    "manipulation":     ["manipulation", "deception", "controlling", "scheming"],
-    "addiction":        ["addiction", "dependency", "compulsion", "indulgence"],
-    "obsession":        ["obsession", "fixation", "preoccupation", "consumed by"],
-    "rigidity":         ["rigidity", "inflexibility", "stubborn", "resistant to change"],
+    "wallowing":        ["wallowing", "self-pity", "dwelling", "stuck in emotion",
+                         "ruminating", "can't move on", "mired in"],
+    "manipulation":     ["manipulation", "deception", "controlling", "scheming",
+                         "underhanded", "pull strings", "covert"],
+    "addiction":        ["addiction", "dependency", "compulsion", "indulgence",
+                         "can't stop", "hooked", "reliance"],
+    "obsession":        ["obsession", "fixation", "preoccupation", "consumed by",
+                         "can't let go", "fixated", "all-consuming"],
+    "rigidity":         ["rigidity", "inflexibility", "stubborn", "resistant to change",
+                         "closed off", "set in ways", "unyielding"],
+    "self-doubt":       ["self-doubt", "insecurity", "not good enough", "questioning yourself",
+                         "uncertain about yourself", "lack confidence"],
+    "avoidance":        ["avoidance", "running away", "escape", "denial",
+                         "refusing to face", "turning away", "ignore"],
+    "overwhelm":        ["overwhelm", "too much", "flooded", "swamped",
+                         "drowned in", "overcome by emotion"],
 }
 
-# Upright positive signal words — if these dominate a reversed-card reading,
-# it suggests the LLM ignored the reversed orientation.
+# ---------------------------------------------------------------------------
+# Orientation signal words
+# IMPORTANT: use word-boundary matching to avoid false positives like
+# "joy" matching a person's name, or "positive" matching "repositioned".
+# ---------------------------------------------------------------------------
+
+# Signals that suggest LLM treated a reversed card as upright/positive
 UPRIGHT_POSITIVE_SIGNALS = [
-    "celebrate", "success", "thrive", "flourish", "abundance",
-    "joy", "wonderful", "positive", "bright future", "exciting opportunity",
-    "great news", "moving forward with confidence", "fully flowing",
+    "celebrate", "flourish", "wonderful", "bright future",
+    "exciting opportunity", "great news", "moving forward with confidence",
+    "fully flowing", "everything is working", "things are going well",
+    "open your heart", "embrace the abundance",
 ]
 
+# Signals that confirm LLM acknowledged the reversed dimension
 REVERSED_SHADOW_SIGNALS = [
-    "reversed", "shadow", "blocked", "inward", "turned inward",
-    "not flowing", "working against", "challenge", "caution",
-    "warning", "difficult", "struggle", "resist", "avoid",
+    "reversed", "shadow", "blocked", "turned inward",
+    "not flowing", "working against", "inner fog", "self-doubt",
+    "inner critic", "holding back", "emotional block",
+    "difficult", "struggle", "resist", "avoid", "caution",
+    "warning", "challenge ahead", "draining",
 ]
+
+
+def _word_boundary_match(phrase: str, text_lower: str) -> bool:
+    """
+    Match a phrase in text using word boundaries to avoid substring false positives.
+    e.g. "joy" should not match inside "enjoy" or a person's name "Joy".
+    For multi-word phrases, simple substring is fine.
+    """
+    phrase_lower = phrase.lower()
+    if " " in phrase_lower:
+        # multi-word phrase: substring match is specific enough
+        return phrase_lower in text_lower
+    else:
+        # single word: require word boundary
+        pattern = r'\b' + re.escape(phrase_lower) + r'\b'
+        return bool(re.search(pattern, text_lower))
 
 
 # ---------------------------------------------------------------------------
@@ -118,12 +210,21 @@ def _theme_in_text(theme: str, text_lower: str) -> tuple[bool, str]:
     """
     Returns (matched: bool, matched_via: str).
     Checks the theme itself first, then its synonyms.
+    Long corpora phrases (>3 words) use substring match directly.
     """
-    if theme.lower() in text_lower:
-        return True, theme
+    theme_lower = theme.lower()
+    words = theme_lower.split()
 
-    for synonym in SYNONYMS.get(theme.lower(), []):
-        if synonym.lower() in text_lower:
+    if len(words) > 3:
+        # Long descriptive phrase from corpora — substring match
+        if theme_lower in text_lower:
+            return True, theme
+    else:
+        if _word_boundary_match(theme_lower, text_lower):
+            return True, theme
+
+    for synonym in SYNONYMS.get(theme_lower, []):
+        if _word_boundary_match(synonym, text_lower):
             return True, synonym
 
     return False, ""
@@ -133,9 +234,16 @@ def _check_reversed_orientation(text_lower: str) -> dict:
     """
     Checks whether a reversed card's reading actually addresses
     the shadow/reversed dimension, or defaults to upright positivity.
+    Uses word-boundary matching to avoid false positives on proper nouns.
     """
-    positive_hits = [w for w in UPRIGHT_POSITIVE_SIGNALS if w in text_lower]
-    shadow_hits = [w for w in REVERSED_SHADOW_SIGNALS if w in text_lower]
+    positive_hits = [
+        w for w in UPRIGHT_POSITIVE_SIGNALS
+        if _word_boundary_match(w, text_lower)
+    ]
+    shadow_hits = [
+        w for w in REVERSED_SHADOW_SIGNALS
+        if _word_boundary_match(w, text_lower)
+    ]
 
     if shadow_hits:
         orientation_verdict = "REVERSED_ACKNOWLEDGED"
@@ -158,10 +266,17 @@ def _check_reversed_orientation(text_lower: str) -> dict:
 def verify_reading(reading) -> dict:
     """
     reading: a Reading model instance.
-
     Returns a full VerificationReport dict.
     """
     text = reading.reading_text
+
+    # Strip user_name from text before matching to avoid false positives
+    # e.g. if user is named "Joy", it should not trigger positive signal detection
+    name = reading.user_name.strip()
+    if name:
+        import re as _re
+        text = _re.sub(_re.escape(name), '', text, flags=_re.IGNORECASE)
+
     text_lower = text.lower()
     card_reports = []
 
@@ -199,7 +314,6 @@ def verify_reading(reading) -> dict:
         total = len(theme_results)
         recall = matched_count / total if total > 0 else 0.0
 
-        # Overall card verdict
         if recall == 1.0:
             card_verdict = "MATCH"
         elif recall == 0.0:
@@ -207,11 +321,9 @@ def verify_reading(reading) -> dict:
         else:
             card_verdict = "PARTIAL_MATCH"
 
-        # Extra check for reversed cards
         orientation_check = None
         if rc.is_reversed:
             orientation_check = _check_reversed_orientation(text_lower)
-            # Downgrade to MISMATCH if reversed orientation was completely ignored
             if (card_verdict in ("MATCH", "PARTIAL_MATCH") and
                     orientation_check["orientation_verdict"] == "REVERSED_IGNORED"):
                 card_verdict = "MISMATCH"
@@ -231,7 +343,6 @@ def verify_reading(reading) -> dict:
             },
         })
 
-    # Overall reading verdict
     verdicts = [r["verdict"] for r in card_reports]
     if all(v == "MATCH" for v in verdicts):
         overall = "MATCH"
