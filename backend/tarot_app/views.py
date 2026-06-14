@@ -148,3 +148,17 @@ class EvaluateReadingView(APIView):
         from .evaluate import evaluate_reading
         result = evaluate_reading(reading)
         return Response(result)
+
+
+class VerifyReadingView(APIView):
+    def get(self, request, reading_id):
+        try:
+            reading = Reading.objects.prefetch_related(
+                'readingcard_set__card'
+            ).get(id=reading_id)
+        except Reading.DoesNotExist:
+            return Response({"error": "Reading not found"}, status=404)
+
+        from .verify import verify_reading
+        result = verify_reading(reading)
+        return Response(result)
