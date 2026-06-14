@@ -1,5 +1,8 @@
 from django.urls import path
-from .views import CardListView, SpreadListView, GenerateReadingView, EvaluateReadingView, VerifyReadingView
+from .views import (
+    CardListView, SpreadListView, GenerateReadingView,
+    EvaluateReadingView, VerifyReadingView, JudgeReportView,
+)
 
 urlpatterns = [
     path('cards/', CardListView.as_view()),
@@ -7,4 +10,5 @@ urlpatterns = [
     path('reading/', GenerateReadingView.as_view()),
     path('reading/<int:reading_id>/evaluate/', EvaluateReadingView.as_view()),
     path('reading/<int:reading_id>/verify/', VerifyReadingView.as_view()),
+    path('reading/<int:reading_id>/judge/', JudgeReportView.as_view()),
 ]

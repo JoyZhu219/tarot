@@ -103,23 +103,42 @@ class GenerateReadingView(APIView):
 
 def _build_prompt(user_name, question, spread_label, card_objects):
     lines = [
-        f"You are an experienced tarot reader. Give a warm, insightful reading.",
-        f"",
+        "You are an experienced tarot reader grounded in the Rider-Waite-Smith tradition.",
+        "Give a warm, insightful reading that is faithful to each card's official meanings.",
+        "",
+        "CRITICAL RULES FOR REVERSED CARDS:",
+        "- A REVERSED card carries shadow, blocked, or distorted energy.",
+        "- You MUST interpret it using its official shadow themes listed below.",
+        "- Do NOT reframe reversed cards as healing, release, or positive turning points",
+        "  unless the official shadow themes explicitly support this.",
+        "- For each reversed card, explicitly name what energy is blocked or distorted.",
+        "",
         f"Querent: {user_name}",
         f"Question: {question}",
         f"Spread: {spread_label}",
-        f"",
-        f"Cards drawn:",
+        "",
+        "Cards drawn:",
     ]
     for item in card_objects:
-        orientation = "reversed" if item["is_reversed"] else "upright"
-        lines.append(
-            f"  - {item['position_label']}: {item['card'].name} ({orientation}) — keywords: {item['card'].keywords}"
-        )
+        card = item["card"]
+        if item["is_reversed"]:
+            shadow_themes = card.reversed_required_themes or []
+            lines += [
+                f"  - {item['position_label']}: {card.name} (REVERSED)",
+                f"    keywords: {card.keywords}",
+                f"    SHADOW THEMES YOU MUST ADDRESS: {shadow_themes}",
+            ]
+        else:
+            upright_themes = card.required_themes or []
+            lines += [
+                f"  - {item['position_label']}: {card.name} (upright)",
+                f"    keywords: {card.keywords}",
+                f"    themes: {upright_themes}",
+            ]
     lines += [
         "",
         "Please provide:",
-        "1. A brief interpretation of each card in its position",
+        "1. A brief interpretation of each card in its position, faithful to the themes above",
         "2. A synthesized overall reading that ties everything together and directly addresses the querent's question",
         "Write in second person (you/your), warm and direct tone.",
     ]
@@ -162,3 +181,30 @@ class VerifyReadingView(APIView):
         from .verify import verify_reading
         result = verify_reading(reading)
         return Response(result)
+
+
+class JudgeReportView(APIView):
+    def get(self, request, reading_id):
+        try:
+            reading = Reading.objects.prefetch_related(
+                'readingcard_set__card'
+            ).get(id=reading_id)
+        except Reading.DoesNotExist:
+            return Response({"error": "Reading not found"}, status=404)
+
+        try:
+            report = reading.verification_report
+        except Exception:
+            # Report not yet generated — run it now
+            from .judge import run_judge
+            report = run_judge(reading)
+
+        return Response({
+            "reading_id": reading_id,
+            "status": report.status,
+            "precision": report.precision,
+            "recall": report.recall,
+            "f1": report.f1,
+            "claims": report.claims,
+            "created_at": str(report.created_at),
+        })

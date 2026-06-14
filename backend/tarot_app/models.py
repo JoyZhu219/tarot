@@ -34,3 +34,22 @@ class ReadingCard(models.Model):
 
     class Meta:
         ordering = ['position']
+
+
+class VerificationReport(models.Model):
+    STATUS_CHOICES = [('ok', 'OK'), ('needs_review', 'Needs Review')]
+
+    reading = models.OneToOneField(
+        Reading,
+        on_delete=models.CASCADE,
+        related_name='verification_report',
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ok')
+    claims = models.JSONField(default=list)
+    precision = models.FloatField(null=True, blank=True)
+    recall = models.FloatField(null=True, blank=True)
+    f1 = models.FloatField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Report for Reading {self.reading_id} — {self.status}"
