@@ -1,0 +1,29 @@
+# Prompt version configuration
+# "active" controls which version current.txt symlinks to.
+# To switch versions:
+#   1. Update "active" below
+#   2. Run: python manage.py update_prompts
+# "history" is append-only — never delete old entries.
+
+prompts:
+  reading_generation:
+    active: v2
+    description: "Generates tarot card readings for querents"
+    history:
+      - version: v1
+        description: "Basic reading prompt, no source tagging, no reversed card rules"
+        created_at: "2026-06-01"
+      - version: v2
+        description: "Source tagging (FROM_RECORD/FROM_QUERENT/GUIDELINE/INFERRED), reversed shadow rules, official themes injected"
+        created_at: "2026-06-14"
+      - version: v3
+        description: "Structured JSON output per sentence, same source tagging as v2"
+        created_at: "2026-06-14"
+
+  reading_judge:
+    active: v1
+    description: "LLM-as-Judge auditor — evaluates readings against official card meanings"
+    history:
+      - version: v1
+        description: "Outputs VERIFIED/UNVERIFIED/HALLUCINATION per claim with covered/missed themes"
+        created_at: "2026-06-14"

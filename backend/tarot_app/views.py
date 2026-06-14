@@ -101,41 +101,9 @@ class GenerateReadingView(APIView):
         })
 
 
-def _build_prompt(user_name, question, spread_label, card_objects):
-    lines = [
-        "You are an experienced tarot reader grounded in the Rider-Waite-Smith tradition.",
-        "Give a warm, insightful reading that is faithful to each card's official meanings.",
-        "",
-        "== SOURCE LABELING RULES ==",
-        "Every sentence or claim in your reading MUST end with a source tag.",
-        "Use exactly one of these tags per sentence:",
-        "",
-        "  [FROM_RECORD]  — directly stated in the official keywords or themes provided below",
-        "  [FROM_QUERENT] — comes from the querent's name, question, or spread choice",
-        "  [GUIDELINE]    — comes from general Rider-Waite-Smith tarot tradition,",
-        "                   not in the specific themes listed but widely accepted",
-        "  [INFERRED]     — your own synthesis, connection, or interpretive leap.",
-        "                   When in doubt, use INFERRED rather than GUIDELINE.",
-        "",
-        "Rules:",
-        "- Every sentence needs exactly one tag at the end, in square brackets.",
-        "- Do not skip tagging any sentence.",
-        "- Do not invent card meanings. If you add something not in the themes, tag it [INFERRED].",
-        "- For REVERSED cards: shadow themes are [FROM_RECORD]. Do NOT reframe them positively.",
-        "",
-        "== CRITICAL RULES FOR REVERSED CARDS ==",
-        "- A REVERSED card carries shadow, blocked, or distorted energy.",
-        "- You MUST interpret it using the official shadow themes listed below.",
-        "- Do NOT reframe reversed cards as healing or positive turning points",
-        "  unless the official shadow themes explicitly support this.",
-        "- For each reversed card, explicitly name what energy is blocked or distorted.",
-        "",
-        f"Querent name: {user_name} [FROM_QUERENT]",
-        f"Question: {question} [FROM_QUERENT]",
-        f"Spread: {spread_label} [FROM_QUERENT]",
-        "",
-        "== CARDS DRAWN ==",
-    ]
+def _build_cards_block(card_objects: list) -> str:
+    """Render the cards section for insertion into prompt templates."""
+    lines = []
     for item in card_objects:
         card = item["card"]
         if item["is_reversed"]:
@@ -156,20 +124,18 @@ def _build_prompt(user_name, question, spread_label, card_objects):
                 f"  Official themes [FROM_RECORD]: {upright_themes}",
                 "",
             ]
-    lines += [
-        "== OUTPUT FORMAT ==",
-        "Write a reading where every sentence ends with its source tag.",
-        "Example format:",
-        "  'This card speaks to sudden disruption in your life. [FROM_RECORD]",
-        "   The energy feels especially intense given your question about work. [FROM_QUERENT]",
-        "   This may point to a need to slow down before making decisions. [INFERRED]'",
-        "",
-        "Please provide:",
-        "1. A brief interpretation of each card in its position, tagging every sentence",
-        "2. A synthesized overall reading addressing the querent's question, tagging every sentence",
-        "Write in second person (you/your), warm and direct tone.",
-    ]
     return "\n".join(lines)
+
+
+def _build_prompt(user_name, question, spread_label, card_objects):
+    from prompts.prompt_manager import prompt_manager
+    return prompt_manager.render(
+        "reading_generation",
+        user_name=user_name,
+        question=question,
+        spread_label=spread_label,
+        cards_block=_build_cards_block(card_objects),
+    )
 
 
 def _call_llm(prompt):

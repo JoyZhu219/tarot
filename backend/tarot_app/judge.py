@@ -22,67 +22,31 @@ from .models import VerificationReport
 # Prompt builder
 # ---------------------------------------------------------------------------
 
-def _build_judge_prompt(reading, card_data: list[dict]) -> str:
-    lines = [
-        "You are a strict tarot reading auditor. Your job is NOT to generate a reading.",
-        "Your job is to evaluate an existing reading against official card meanings.",
-        "",
-        "## Reading to Audit",
-        f"Querent: {reading.user_name}",
-        f"Question: {reading.question}",
-        f"Spread: {reading.spread_type}",
-        "",
-        "## Cards Drawn (with official ground truth from database)",
-    ]
-
+def _build_cards_block_for_judge(card_data: list[dict]) -> str:
+    lines = []
     for cd in card_data:
         orientation = "REVERSED" if cd["is_reversed"] else "upright"
         themes_key = "reversed_required_themes" if cd["is_reversed"] else "required_themes"
         themes = cd[themes_key]
         lines += [
-            f"",
             f"### {cd['position_label']}: {cd['card_name']} ({orientation})",
             f"Official keywords: {cd['keywords']}",
             f"Official themes for this orientation: {json.dumps(themes)}",
+            "",
         ]
-
-    lines += [
-        "",
-        "## Generated Reading Text",
-        "---",
-        reading.reading_text,
-        "---",
-        "",
-        "## Your Task",
-        "Extract every factual claim the reading makes about the cards.",
-        "For each claim, judge it against the official themes above.",
-        "",
-        "Verdict definitions:",
-        "  VERIFIED     — claim is supported by the official themes",
-        "  UNVERIFIED   — claim is plausible but not in the official themes",
-        "  HALLUCINATION— claim directly contradicts the official themes,",
-        "                 or attributes wrong meaning to the card,",
-        "                 or ignores reversed orientation entirely",
-        "",
-        "Also track which official themes were covered vs missed.",
-        "",
-        "Return ONLY valid JSON, no markdown, no explanation outside the JSON.",
-        "Schema:",
-        "{",
-        '  "claims": [',
-        '    {',
-        '      "card_name": "string",',
-        '      "claim": "short quote or paraphrase of the claim from the reading",',
-        '      "verdict": "VERIFIED | UNVERIFIED | HALLUCINATION",',
-        '      "reason": "one sentence explanation referencing the official themes"',
-        '    }',
-        '  ],',
-        '  "covered_themes": ["theme1", "theme2"],',
-        '  "missed_themes": ["theme3", "theme4"]',
-        "}",
-    ]
-
     return "\n".join(lines)
+
+
+def _build_judge_prompt(reading, card_data: list[dict]) -> str:
+    from prompts.prompt_manager import prompt_manager
+    return prompt_manager.render(
+        "reading_judge",
+        user_name=reading.user_name,
+        question=reading.question,
+        spread_type=reading.spread_type,
+        cards_block=_build_cards_block_for_judge(card_data),
+        reading_text=reading.reading_text,
+    )
 
 
 # ---------------------------------------------------------------------------
