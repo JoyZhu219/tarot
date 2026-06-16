@@ -70,8 +70,7 @@ class GenerateReadingView(APIView):
             })
 
         prompt = _build_prompt(user_name, question, spread["label"], card_objects)
-        raw_output = _call_llm(prompt)
-        parsed = _parse_and_validate_llm_output(raw_output)
+        parsed = _call_llm_with_retry(prompt, max_retries=2)
         reading_text = parsed["reading_text"]
 
         reading = Reading.objects.create(
@@ -93,6 +92,8 @@ class GenerateReadingView(APIView):
             "reading_id": reading.id,
             "reading_text": reading_text,
             "validation": parsed["validation"],
+            "attempts": parsed.get("attempts", 1),
+            "status": parsed.get("status", "ok"),
             "cards": [
                 {
                     "position_label": item["position_label"],
@@ -369,3 +370,92 @@ def _structured_to_text(reading_output) -> str:
     for s in reading_output.overall:
         lines.append(f"{s.sentence} [{s.source.value}]")
     return "\n".join(lines)
+
+
+def _call_llm_with_retry(prompt: str, max_retries: int = 2) -> dict:
+    import json as _json
+
+    last_raw = None
+    last_errors = None
+    messages = [{"role": "user", "content": prompt}]
+
+    for attempt in range(1, max_retries + 2):
+        print(f"[LLM] attempt {attempt}...")
+
+        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        message = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2048,
+            tools=[READING_TOOL],
+            tool_choice={"type": "any"},
+            messages=messages,
+        )
+
+        # Extract tool_use block
+        raw = None
+        tool_use_block = None
+        for block in message.content:
+            if block.type == "tool_use" and block.name == "submit_reading":
+                raw = _json.dumps(block.input)
+                tool_use_block = block
+                break
+
+        if raw is None:
+            for block in message.content:
+                if hasattr(block, "text"):
+                    raw = block.text
+                    break
+            raw = raw or "{}"
+
+        last_raw = raw
+        parsed = _parse_and_validate_llm_output(raw)
+
+        if parsed["validation"]["ok"]:
+            result_status = "ok" if attempt == 1 else "recovered"
+            return {**parsed, "attempts": attempt, "status": result_status}
+
+        # Validation failed — build error feedback
+        last_errors = parsed["validation"]["errors"]
+        error_summary = "\n".join(
+            f"  - field '{e['field']}': {e['message']} (got: {repr(e.get('invalid_value'))})"
+            for e in last_errors
+        )
+
+        # Extend conversation with error feedback
+        if tool_use_block:
+            messages.append({"role": "assistant", "content": message.content})
+            messages.append({
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_block.id,
+                        "content": (
+                            f"Validation failed. Please fix these errors and call submit_reading again:\n"
+                            f"{error_summary}"
+                        ),
+                    }
+                ],
+            })
+        else:
+            messages.append({"role": "assistant", "content": raw})
+            messages.append({
+                "role": "user",
+                "content": f"Validation errors:\n{error_summary}\nPlease fix and resubmit.",
+            })
+
+        print(f"[LLM] attempt {attempt} failed: {len(last_errors)} errors")
+
+    # All retries exhausted
+    print(f"[LLM] all attempts failed, marking parse_failed")
+    return {
+        "reading_text": last_raw,
+        "structured": None,
+        "validation": {
+            "ok": False,
+            "errors": last_errors,
+            "note": "parse_failed after all retries",
+        },
+        "attempts": max_retries + 1,
+        "status": "parse_failed",
+    }
