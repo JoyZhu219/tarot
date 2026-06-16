@@ -7,7 +7,7 @@
 
 prompts:
   reading_generation:
-    active: v2
+    active: v3
     description: "Generates tarot card readings for querents"
     history:
       - version: v1
@@ -17,8 +17,8 @@ prompts:
         description: "Source tagging (FROM_RECORD/FROM_QUERENT/GUIDELINE/INFERRED), reversed shadow rules, official themes injected"
         created_at: "2026-06-14"
       - version: v3
-        description: "Structured JSON output per sentence, same source tagging as v2"
-        created_at: "2026-06-14"
+        description: "Added RAG grounding: Waite original text injected per card, LLM instructed not to invent meanings outside reference material"
+        created_at: "2026-06-16"
 
   reading_judge:
     active: v1

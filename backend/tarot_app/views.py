@@ -101,7 +101,25 @@ class GenerateReadingView(APIView):
         })
 
 
-def _build_cards_block(card_objects: list) -> str:
+def _fetch_rag_context(card_objects: list) -> dict:
+    """
+    Query pgvector for each card and return Waite source text.
+    Returns {card_name: [chunk_text, ...]}
+    Silently skips if RAG table doesn't exist yet.
+    """
+    try:
+        from rag.retriever import retrieve_context
+        result = {}
+        for item in card_objects:
+            card_name = item["card"].name
+            chunks = retrieve_context(card_name, top_k=2)
+            result[card_name] = [c["text"] for c in chunks]
+        return result
+    except Exception:
+        return {}
+
+
+def _build_cards_block(card_objects: list, rag_context: dict = None) -> str:
     """Render the cards section for insertion into prompt templates."""
     lines = []
     for item in card_objects:
@@ -113,7 +131,6 @@ def _build_cards_block(card_objects: list) -> str:
                 f"  Card: {card.name} (REVERSED)",
                 f"  Official keywords [FROM_RECORD]: {card.keywords}",
                 f"  Official shadow themes you MUST address [FROM_RECORD]: {shadow_themes}",
-                "",
             ]
         else:
             upright_themes = card.required_themes or []
@@ -122,19 +139,40 @@ def _build_cards_block(card_objects: list) -> str:
                 f"  Card: {card.name} (upright)",
                 f"  Official keywords [FROM_RECORD]: {card.keywords}",
                 f"  Official themes [FROM_RECORD]: {upright_themes}",
-                "",
             ]
+
+        # Append RAG context if available for this card
+        if rag_context and card.name in rag_context:
+            chunks = rag_context[card.name]
+            if chunks:
+                lines.append(f"  Waite's original description [FROM_RECORD]:")
+                for chunk in chunks:
+                    # Trim to first 300 words to keep prompt size reasonable
+                    words = chunk.split()[:300]
+                    trimmed = " ".join(words)
+                    lines.append(f"    \"\"\"")
+                    lines.append(f"    {trimmed}")
+                    lines.append(f"    \"\"\"")
+        lines.append("")
+
     return "\n".join(lines)
 
 
 def _build_prompt(user_name, question, spread_label, card_objects):
     from prompts.prompt_manager import prompt_manager
+
+    # Step 1: fetch RAG context for all cards
+    rag_context = _fetch_rag_context(card_objects)
+
+    # Step 2: build cards block with RAG context embedded
+    cards_block = _build_cards_block(card_objects, rag_context=rag_context)
+
     return prompt_manager.render(
         "reading_generation",
         user_name=user_name,
         question=question,
         spread_label=spread_label,
-        cards_block=_build_cards_block(card_objects),
+        cards_block=cards_block,
     )
 
 

@@ -20,12 +20,12 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--prompt", type=str, default=None,
                             help="Specific prompt to update (default: all)")
-        parser.add_argument("--version", type=str, default=None,
+        parser.add_argument("--to", type=str, default=None,
                             help="Version to switch to (requires --prompt)")
 
     def handle(self, *args, **options):
         target_prompt = options["prompt"]
-        target_version = options["version"]
+        target_version = options["to"]
 
         if target_version and not target_prompt:
             self.stderr.write("--version requires --prompt")

@@ -5,17 +5,21 @@ Give a warm, insightful reading that is faithful to each card's official meaning
 Every sentence or claim in your reading MUST end with a source tag.
 Use exactly one of these tags per sentence:
 
-  [FROM_RECORD]  — directly stated in the official keywords or themes provided below
+  [FROM_RECORD]  — directly stated in the official keywords, themes, or Waite's
+                   original description provided below
   [FROM_QUERENT] — comes from the querent's name, question, or spread choice
   [GUIDELINE]    — comes from general Rider-Waite-Smith tarot tradition,
-                   not in the specific themes listed but widely accepted
+                   not in the specific materials listed but widely accepted
   [INFERRED]     — your own synthesis, connection, or interpretive leap.
                    When in doubt, use INFERRED rather than GUIDELINE.
 
 Rules:
 - Every sentence needs exactly one tag at the end, in square brackets.
 - Do not skip tagging any sentence.
-- Do not invent card meanings. If you add something not in the themes, tag it [INFERRED].
+- CRITICAL: If something is NOT in the official keywords, themes, or Waite's
+  description below, do NOT present it as fact. Tag it [INFERRED] or omit it.
+- Do not invent card meanings. If Waite's description does not mention something,
+  do not claim it is part of the card's meaning.
 - For REVERSED cards: shadow themes are [FROM_RECORD]. Do NOT reframe them positively.
 
 == CRITICAL RULES FOR REVERSED CARDS ==
@@ -33,31 +37,15 @@ Spread: {{ spread_label }} [FROM_QUERENT]
 {{ cards_block }}
 
 == OUTPUT FORMAT ==
-Return a JSON object with this exact schema. No markdown, no text outside the JSON.
+Write a reading where every sentence ends with its source tag.
+Example format:
+  'This card speaks to sudden disruption in your life. [FROM_RECORD]
+   The energy feels especially intense given your question about work. [FROM_QUERENT]
+   This may point to a need to slow down before making decisions. [INFERRED]'
 
-{
-  "cards": [
-    {
-      "position_label": "string",
-      "card_name": "string",
-      "is_reversed": true,
-      "interpretation": [
-        {
-          "sentence": "the sentence text without the tag",
-          "source": "FROM_RECORD | FROM_QUERENT | GUIDELINE | INFERRED"
-        }
-      ]
-    }
-  ],
-  "overall": [
-    {
-      "sentence": "the sentence text without the tag",
-      "source": "FROM_RECORD | FROM_QUERENT | GUIDELINE | INFERRED"
-    }
-  ]
-}
-
-Rules:
-- Every sentence goes into the "sentence" field, tag goes into "source".
-- Do not include the [TAG] inside the sentence string.
-- Be faithful to the official themes above for each card.
+Please provide:
+1. A brief interpretation of each card in its position, tagging every sentence.
+   Stay close to Waite's description and the official themes — do not add meanings
+   that are not supported by the reference material above.
+2. A synthesized overall reading addressing the querent's question, tagging every sentence.
+Write in second person (you/your), warm and direct tone.
