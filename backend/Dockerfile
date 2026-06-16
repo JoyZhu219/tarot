@@ -13,4 +13,5 @@ CMD ["sh", "-c", "\
   done && \
   python manage.py seed_cards && \
   python manage.py import_themes && \
+  python rag/ingest_embeddings.py && \
   python manage.py runserver 0.0.0.0:8000"]
