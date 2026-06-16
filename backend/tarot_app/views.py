@@ -70,7 +70,9 @@ class GenerateReadingView(APIView):
             })
 
         prompt = _build_prompt(user_name, question, spread["label"], card_objects)
-        reading_text = _call_llm(prompt)
+        raw_output = _call_llm(prompt)
+        parsed = _parse_and_validate_llm_output(raw_output)
+        reading_text = parsed["reading_text"]
 
         reading = Reading.objects.create(
             user_name=user_name,
@@ -90,6 +92,7 @@ class GenerateReadingView(APIView):
         return Response({
             "reading_id": reading.id,
             "reading_text": reading_text,
+            "validation": parsed["validation"],
             "cards": [
                 {
                     "position_label": item["position_label"],
@@ -176,14 +179,88 @@ def _build_prompt(user_name, question, spread_label, card_objects):
     )
 
 
+READING_TOOL = {
+    "name": "submit_reading",
+    "description": (
+        "Submit a completed tarot reading in structured format. "
+        "You MUST call this tool to return your reading. "
+        "Every sentence must include a source tag."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "problem": {
+                "type": "string",
+                "description": "One sentence restating the querent's core question.",
+            },
+            "cards": {
+                "type": "array",
+                "description": "One entry per card drawn, in spread order.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "position_label": {"type": "string"},
+                        "card_name":      {"type": "string"},
+                        "is_reversed":    {"type": "boolean"},
+                        "interpretation": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "sentence": {"type": "string"},
+                                    "source": {
+                                        "type": "string",
+                                        "enum": ["FROM_RECORD", "FROM_QUERENT", "GUIDELINE", "INFERRED"],
+                                    },
+                                },
+                                "required": ["sentence", "source"],
+                            },
+                        },
+                    },
+                    "required": ["position_label", "card_name", "is_reversed", "interpretation"],
+                },
+            },
+            "overall": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "sentence": {"type": "string"},
+                        "source": {
+                            "type": "string",
+                            "enum": ["FROM_RECORD", "FROM_QUERENT", "GUIDELINE", "INFERRED"],
+                        },
+                    },
+                    "required": ["sentence", "source"],
+                },
+            },
+        },
+        "required": ["problem", "cards", "overall"],
+    },
+}
+
+
 def _call_llm(prompt):
+    import json as _json
     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
     message = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=1024,
+        max_tokens=2048,
+        tools=[READING_TOOL],
+        tool_choice={"type": "any"},
         messages=[{"role": "user", "content": prompt}],
     )
-    return message.content[0].text
+
+    # LLM is forced to call submit_reading via tool_choice="any"
+    for block in message.content:
+        if block.type == "tool_use" and block.name == "submit_reading":
+            return _json.dumps(block.input)
+
+    # Fallback if LLM somehow returns text
+    for block in message.content:
+        if hasattr(block, "text"):
+            return block.text
+    return "{}"
 
 
 class EvaluateReadingView(APIView):
@@ -239,3 +316,56 @@ class JudgeReportView(APIView):
             "claims": report.claims,
             "created_at": str(report.created_at),
         })
+
+
+def _parse_and_validate_llm_output(raw: str) -> dict:
+    import json
+    from .schemas import validate_reading_output
+
+    # Strip markdown fences if present
+    clean = raw.strip()
+    if clean.startswith("```"):
+        clean = clean.split("\n", 1)[-1]
+        clean = clean.rsplit("```", 1)[0].strip()
+
+    # Try to parse as JSON (v3 prompt returns structured JSON)
+    try:
+        parsed = json.loads(clean)
+    except json.JSONDecodeError:
+        # plain text output (v1/v2) — skip validation
+        return {
+            "reading_text": raw,
+            "structured": None,
+            "validation": {"ok": True, "errors": [], "note": "plain text, skipped schema validation"},
+        }
+
+    # Validate against Pydantic schema
+    result = validate_reading_output(parsed)
+
+    if result.ok:
+        reading_text = _structured_to_text(result.data)
+        return {
+            "reading_text": reading_text,
+            "structured": parsed,
+            "validation": {"ok": True, "errors": []},
+        }
+    else:
+        return {
+            "reading_text": raw,
+            "structured": parsed,
+            "validation": {"ok": False, "errors": result.errors},
+        }
+
+
+def _structured_to_text(reading_output) -> str:
+    lines = []
+    for card in reading_output.cards:
+        rev = " (Reversed)" if card.is_reversed else ""
+        lines.append(f"## {card.position_label}: {card.card_name}{rev}")
+        for s in card.interpretation:
+            lines.append(f"{s.sentence} [{s.source.value}]")
+        lines.append("")
+    lines.append("## Overall Reading")
+    for s in reading_output.overall:
+        lines.append(f"{s.sentence} [{s.source.value}]")
+    return "\n".join(lines)
