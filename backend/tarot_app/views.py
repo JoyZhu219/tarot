@@ -69,28 +69,12 @@ class GenerateReadingView(APIView):
                 "is_reversed": item.get("is_reversed", False),
             })
 
-        # === Router: assess complexity and pick a strategy ===
-        from .router import assess_complexity, build_router_decision_log
-        strategy = assess_complexity(question, card_count=len(card_objects), spread_key=spread_key)
-
-        prompt = _build_prompt(user_name, question, spread["label"], card_objects,
-                               rag_top_k=strategy.rag_top_k,
-                               requires_narrative_linking=strategy.requires_narrative_linking)
-        rag_chunks_used = _fetch_rag_context(card_objects, top_k=strategy.rag_top_k)
-
         # Create reading first (placeholder text) so we have an id for logging
         reading = Reading.objects.create(
             user_name=user_name,
             question=question,
             spread_type=spread_key,
             reading_text="",
-        )
-
-        # Log the routing decision
-        from .models import AgentDecisionLog
-        AgentDecisionLog.objects.create(
-            reading=reading,
-            **build_router_decision_log(question, len(card_objects), spread_key, strategy, sequence_number=1),
         )
 
         # ReadingCard rows must exist before judge runs inside the loop,
@@ -104,34 +88,30 @@ class GenerateReadingView(APIView):
                 is_reversed=item["is_reversed"],
             )
 
-        from .evaluator_generator_loop import generate_with_retry_loop
-        loop_result = generate_with_retry_loop(
-            initial_prompt=prompt,
+        # Hand off to the orchestrator: Router -> RAG -> Prompt build -> Evaluator-Generator Loop
+        from .orchestrator import ReadingOrchestrator
+        orchestrator = ReadingOrchestrator(
             reading=reading,
-            prompt_version=strategy.prompt_version,
-            rag_chunks_used=rag_chunks_used,
+            user_name=user_name,
+            question=question,
+            spread_label=spread["label"],
+            spread_key=spread_key,
+            card_objects=card_objects,
             max_loop_iterations=2,
-            schema_max_retries=strategy.max_retries,
         )
+        result = orchestrator.process()
 
-        reading_text = loop_result["reading_text"]
-        reading.reading_text = reading_text
+        reading.reading_text = result["reading_text"]
         reading.save(update_fields=["reading_text"])
 
         return Response({
             "reading_id": reading.id,
-            "reading_text": reading_text,
-            "final_status": loop_result["final_status"],
-            "total_generations": loop_result["total_generations"],
-            "best_f1": loop_result["best_f1"],
-            "best_hallucination_count": loop_result["best_hallucination_count"],
-            "strategy": {
-                "name": strategy.name,
-                "prompt_version": strategy.prompt_version,
-                "max_retries": strategy.max_retries,
-                "rag_top_k": strategy.rag_top_k,
-                "requires_narrative_linking": strategy.requires_narrative_linking,
-            },
+            "reading_text": result["reading_text"],
+            "final_status": result["final_status"],
+            "total_generations": result["total_generations"],
+            "best_f1": result["best_f1"],
+            "best_hallucination_count": result["best_hallucination_count"],
+            "strategy": result["strategy"],
             "cards": [
                 {
                     "position_label": item["position_label"],
