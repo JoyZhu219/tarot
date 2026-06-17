@@ -69,8 +69,14 @@ class GenerateReadingView(APIView):
                 "is_reversed": item.get("is_reversed", False),
             })
 
-        prompt = _build_prompt(user_name, question, spread["label"], card_objects)
-        rag_chunks_used = _fetch_rag_context(card_objects)
+        # === Router: assess complexity and pick a strategy ===
+        from .router import assess_complexity, build_router_decision_log
+        strategy = assess_complexity(question, card_count=len(card_objects), spread_key=spread_key)
+
+        prompt = _build_prompt(user_name, question, spread["label"], card_objects,
+                               rag_top_k=strategy.rag_top_k,
+                               requires_narrative_linking=strategy.requires_narrative_linking)
+        rag_chunks_used = _fetch_rag_context(card_objects, top_k=strategy.rag_top_k)
 
         # Create reading first (placeholder text) so we have an id for logging
         reading = Reading.objects.create(
@@ -80,14 +86,18 @@ class GenerateReadingView(APIView):
             reading_text="",
         )
 
-        from prompts.prompt_manager import prompt_manager
-        active_version = prompt_manager.active_version("reading_generation")
+        # Log the routing decision
+        from .models import AgentDecisionLog
+        AgentDecisionLog.objects.create(
+            reading=reading,
+            **build_router_decision_log(question, len(card_objects), spread_key, strategy, sequence_number=1),
+        )
 
         parsed = _call_llm_with_retry(
             prompt,
-            max_retries=2,
+            max_retries=strategy.max_retries,
             reading=reading,
-            prompt_version=active_version,
+            prompt_version=strategy.prompt_version,
             rag_chunks_used=rag_chunks_used,
         )
         reading_text = parsed["reading_text"]
@@ -109,6 +119,13 @@ class GenerateReadingView(APIView):
             "validation": parsed["validation"],
             "attempts": parsed.get("attempts", 1),
             "status": parsed.get("status", "ok"),
+            "strategy": {
+                "name": strategy.name,
+                "prompt_version": strategy.prompt_version,
+                "max_retries": strategy.max_retries,
+                "rag_top_k": strategy.rag_top_k,
+                "requires_narrative_linking": strategy.requires_narrative_linking,
+            },
             "cards": [
                 {
                     "position_label": item["position_label"],
@@ -120,7 +137,7 @@ class GenerateReadingView(APIView):
         })
 
 
-def _fetch_rag_context(card_objects: list) -> dict:
+def _fetch_rag_context(card_objects: list, top_k: int = 2) -> dict:
     """
     Query pgvector for each card and return Waite source text.
     Returns {card_name: [chunk_text, ...]}
@@ -131,7 +148,7 @@ def _fetch_rag_context(card_objects: list) -> dict:
         result = {}
         for item in card_objects:
             card_name = item["card"].name
-            chunks = retrieve_context(card_name, top_k=2)
+            chunks = retrieve_context(card_name, top_k=top_k)
             result[card_name] = [c["text"] for c in chunks]
         return result
     except Exception:
@@ -177,14 +194,27 @@ def _build_cards_block(card_objects: list, rag_context: dict = None) -> str:
     return "\n".join(lines)
 
 
-def _build_prompt(user_name, question, spread_label, card_objects):
+def _build_prompt(user_name, question, spread_label, card_objects, rag_top_k: int = 2,
+                  requires_narrative_linking: bool = False):
     from prompts.prompt_manager import prompt_manager
 
     # Step 1: fetch RAG context for all cards
-    rag_context = _fetch_rag_context(card_objects)
+    rag_context = _fetch_rag_context(card_objects, top_k=rag_top_k)
 
     # Step 2: build cards block with RAG context embedded
     cards_block = _build_cards_block(card_objects, rag_context=rag_context)
+
+    # Step 3: if this spread requires cross-position narrative linking
+    # (e.g. Past-Present-Future, Celtic Cross), make that explicit —
+    # this is the real content difference between simple and complex,
+    # not just a different retry/RAG budget.
+    if requires_narrative_linking:
+        cards_block += (
+            "\n\nNOTE: This spread requires connecting positions into one narrative. "
+            "When writing the 'overall' section, explicitly relate at least two "
+            "positions to each other (e.g. how 'Past' explains 'Present', or how "
+            "'Challenge' informs 'Advice'). Do not treat each card as fully independent."
+        )
 
     return prompt_manager.render(
         "reading_generation",
