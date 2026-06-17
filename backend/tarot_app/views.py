@@ -3,7 +3,7 @@ from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Card, Reading, ReadingCard
+from .models import Card, Reading, ReadingCard, LLMCallLog
 
 SPREADS = {
     "single": {
@@ -70,15 +70,30 @@ class GenerateReadingView(APIView):
             })
 
         prompt = _build_prompt(user_name, question, spread["label"], card_objects)
-        parsed = _call_llm_with_retry(prompt, max_retries=2)
-        reading_text = parsed["reading_text"]
+        rag_chunks_used = _fetch_rag_context(card_objects)
 
+        # Create reading first (placeholder text) so we have an id for logging
         reading = Reading.objects.create(
             user_name=user_name,
             question=question,
             spread_type=spread_key,
-            reading_text=reading_text,
+            reading_text="",
         )
+
+        from prompts.prompt_manager import prompt_manager
+        active_version = prompt_manager.active_version("reading_generation")
+
+        parsed = _call_llm_with_retry(
+            prompt,
+            max_retries=2,
+            reading=reading,
+            prompt_version=active_version,
+            rag_chunks_used=rag_chunks_used,
+        )
+        reading_text = parsed["reading_text"]
+        reading.reading_text = reading_text
+        reading.save(update_fields=["reading_text"])
+
         for item in card_objects:
             ReadingCard.objects.create(
                 reading=reading,
@@ -372,24 +387,44 @@ def _structured_to_text(reading_output) -> str:
     return "\n".join(lines)
 
 
-def _call_llm_with_retry(prompt: str, max_retries: int = 2) -> dict:
+def _call_llm_with_retry(prompt: str, max_retries: int = 2, reading=None,
+                          prompt_version: str = "unknown", rag_chunks_used: dict = None) -> dict:
+    """
+    Calls LLM with validation + retry loop. Logs every attempt to LLMCallLog
+    if a `reading` instance is provided.
+    """
     import json as _json
+    import time
 
     last_raw = None
     last_errors = None
     messages = [{"role": "user", "content": prompt}]
 
+    # Flatten rag_chunks_used dict into a simple list for logging
+    rag_log_payload = []
+    if rag_chunks_used:
+        for card_name, chunks in rag_chunks_used.items():
+            for chunk_text in chunks:
+                rag_log_payload.append({
+                    "card_name": card_name,
+                    "text_preview": chunk_text[:150],
+                })
+
     for attempt in range(1, max_retries + 2):
         print(f"[LLM] attempt {attempt}...")
 
         client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        model_name = "claude-sonnet-4-6"
+
+        start_time = time.monotonic()
         message = client.messages.create(
-            model="claude-sonnet-4-6",
+            model=model_name,
             max_tokens=2048,
             tools=[READING_TOOL],
             tool_choice={"type": "any"},
             messages=messages,
         )
+        latency_ms = int((time.monotonic() - start_time) * 1000)
 
         # Extract tool_use block
         raw = None
@@ -409,19 +444,43 @@ def _call_llm_with_retry(prompt: str, max_retries: int = 2) -> dict:
 
         last_raw = raw
         parsed = _parse_and_validate_llm_output(raw)
+        validation_ok = parsed["validation"]["ok"]
+        validation_errors = parsed["validation"].get("errors", [])
 
-        if parsed["validation"]["ok"]:
+        if validation_ok:
             result_status = "ok" if attempt == 1 else "recovered"
+        else:
+            result_status = "pending_retry"  # may still retry; final log updated below if exhausted
+
+        # Log this attempt
+        if reading is not None:
+            LLMCallLog.objects.create(
+                reading=reading,
+                prompt_version=prompt_version,
+                full_prompt=prompt,
+                model=model_name,
+                rag_chunks_used=rag_log_payload,
+                raw_response=raw,
+                attempt_number=attempt,
+                validation_errors=validation_errors,
+                final_status="ok" if (validation_ok and attempt == 1) else (
+                    "recovered" if validation_ok else "parse_failed"
+                ),
+                latency_ms=latency_ms,
+                input_tokens=getattr(message.usage, "input_tokens", None),
+                output_tokens=getattr(message.usage, "output_tokens", None),
+            )
+
+        if validation_ok:
             return {**parsed, "attempts": attempt, "status": result_status}
 
-        # Validation failed — build error feedback
-        last_errors = parsed["validation"]["errors"]
+        # Validation failed — build error feedback for next attempt
+        last_errors = validation_errors
         error_summary = "\n".join(
             f"  - field '{e['field']}': {e['message']} (got: {repr(e.get('invalid_value'))})"
             for e in last_errors
         )
 
-        # Extend conversation with error feedback
         if tool_use_block:
             messages.append({"role": "assistant", "content": message.content})
             messages.append({
@@ -446,8 +505,8 @@ def _call_llm_with_retry(prompt: str, max_retries: int = 2) -> dict:
 
         print(f"[LLM] attempt {attempt} failed: {len(last_errors)} errors")
 
-    # All retries exhausted
-    print(f"[LLM] all attempts failed, marking parse_failed")
+    # All retries exhausted — the last logged entry already has final_status=parse_failed
+    print("[LLM] all attempts failed, marking parse_failed")
     return {
         "reading_text": last_raw,
         "structured": None,

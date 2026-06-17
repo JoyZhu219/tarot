@@ -53,3 +53,42 @@ class VerificationReport(models.Model):
 
     def __str__(self):
         return f"Report for Reading {self.reading_id} — {self.status}"
+
+
+class LLMCallLog(models.Model):
+    STATUS_CHOICES = [
+        ('ok', 'OK'),
+        ('recovered', 'Recovered after retry'),
+        ('parse_failed', 'Parse Failed'),
+    ]
+
+    reading = models.ForeignKey(
+        Reading,
+        on_delete=models.CASCADE,
+        related_name='llm_calls',
+    )
+
+    # Request
+    prompt_version = models.CharField(max_length=20)
+    full_prompt = models.TextField()
+    model = models.CharField(max_length=100)
+    rag_chunks_used = models.JSONField(default=list)
+
+    # Response
+    raw_response = models.TextField()
+    attempt_number = models.IntegerField()
+    validation_errors = models.JSONField(default=list, blank=True)
+    final_status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+
+    # Performance
+    latency_ms = models.IntegerField()
+    input_tokens = models.IntegerField(null=True, blank=True)
+    output_tokens = models.IntegerField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['reading_id', 'attempt_number']
+
+    def __str__(self):
+        return f"Reading {self.reading_id} attempt {self.attempt_number} — {self.final_status}"
