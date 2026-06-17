@@ -518,3 +518,25 @@ def _call_llm_with_retry(prompt: str, max_retries: int = 2, reading=None,
         "attempts": max_retries + 1,
         "status": "parse_failed",
     }
+
+
+class LLMCostsView(APIView):
+    def get(self, request):
+        from .cost_stats import compute_cost_stats
+
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        input_price = request.query_params.get("input_price")
+        output_price = request.query_params.get("output_price")
+
+        try:
+            result = compute_cost_stats(
+                start_date=start_date,
+                end_date=end_date,
+                input_price_per_m=float(input_price) if input_price else None,
+                output_price_per_m=float(output_price) if output_price else None,
+            )
+        except ValueError as e:
+            return Response({"error": f"Invalid date format. Use YYYY-MM-DD. ({e})"}, status=400)
+
+        return Response(result)
