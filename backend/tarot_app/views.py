@@ -93,17 +93,8 @@ class GenerateReadingView(APIView):
             **build_router_decision_log(question, len(card_objects), spread_key, strategy, sequence_number=1),
         )
 
-        parsed = _call_llm_with_retry(
-            prompt,
-            max_retries=strategy.max_retries,
-            reading=reading,
-            prompt_version=strategy.prompt_version,
-            rag_chunks_used=rag_chunks_used,
-        )
-        reading_text = parsed["reading_text"]
-        reading.reading_text = reading_text
-        reading.save(update_fields=["reading_text"])
-
+        # ReadingCard rows must exist before judge runs inside the loop,
+        # since run_judge() reads reading.readingcard_set
         for item in card_objects:
             ReadingCard.objects.create(
                 reading=reading,
@@ -113,12 +104,27 @@ class GenerateReadingView(APIView):
                 is_reversed=item["is_reversed"],
             )
 
+        from .evaluator_generator_loop import generate_with_retry_loop
+        loop_result = generate_with_retry_loop(
+            initial_prompt=prompt,
+            reading=reading,
+            prompt_version=strategy.prompt_version,
+            rag_chunks_used=rag_chunks_used,
+            max_loop_iterations=2,
+            schema_max_retries=strategy.max_retries,
+        )
+
+        reading_text = loop_result["reading_text"]
+        reading.reading_text = reading_text
+        reading.save(update_fields=["reading_text"])
+
         return Response({
             "reading_id": reading.id,
             "reading_text": reading_text,
-            "validation": parsed["validation"],
-            "attempts": parsed.get("attempts", 1),
-            "status": parsed.get("status", "ok"),
+            "final_status": loop_result["final_status"],
+            "total_generations": loop_result["total_generations"],
+            "best_f1": loop_result["best_f1"],
+            "best_hallucination_count": loop_result["best_hallucination_count"],
             "strategy": {
                 "name": strategy.name,
                 "prompt_version": strategy.prompt_version,
