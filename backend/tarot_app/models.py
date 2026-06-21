@@ -92,3 +92,58 @@ class LLMCallLog(models.Model):
 
     def __str__(self):
         return f"Reading {self.reading_id} attempt {self.attempt_number} — {self.final_status}"
+
+
+class AgentDecisionLog(models.Model):
+    """
+    Records every decision point in the reading-generation pipeline.
+    Designed so the pipeline can be audited end-to-end, and so future
+    agentic behavior (self-correction, dynamic retries, tool routing)
+    has a structured trace to reason over.
+    """
+    DECISION_POINTS = [
+        ('rag_retrieval',    'RAG Retrieval'),
+        ('prompt_build',     'Prompt Build'),
+        ('llm_generation',   'LLM Generation'),
+        ('schema_validation','Schema Validation'),
+        ('retry_decision',   'Retry Decision'),
+        ('judge_review',     'Judge Review'),
+        ('final_status',     'Final Status Decision'),
+    ]
+
+    OUTCOME_CHOICES = [
+        ('success', 'Success'),
+        ('corrected', 'Corrected (retry/fallback used)'),
+        ('failed', 'Failed'),
+    ]
+
+    reading = models.ForeignKey(
+        Reading,
+        on_delete=models.CASCADE,
+        related_name='decision_logs',
+    )
+
+    decision_point = models.CharField(max_length=50, choices=DECISION_POINTS)
+    sequence_number = models.IntegerField()
+
+    # Core four fields
+    input_data = models.JSONField(default=dict)
+    decision = models.TextField()
+    rationale = models.TextField()
+    output_data = models.JSONField(default=dict)
+
+    # Cost
+    latency_ms = models.IntegerField(default=0)
+    input_tokens = models.IntegerField(null=True, blank=True)
+    output_tokens = models.IntegerField(null=True, blank=True)
+    cost_usd = models.FloatField(default=0.0)
+
+    outcome = models.CharField(max_length=20, choices=OUTCOME_CHOICES, default='success')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['reading_id', 'sequence_number']
+
+    def __str__(self):
+        return f"Reading {self.reading_id} #{self.sequence_number} — {self.decision_point} ({self.outcome})"

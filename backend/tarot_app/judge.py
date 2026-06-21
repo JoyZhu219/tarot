@@ -110,7 +110,7 @@ def run_judge(reading) -> VerificationReport:
 
     message = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=2000,
+        max_tokens=4096,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -122,7 +122,18 @@ def run_judge(reading) -> VerificationReport:
     except json.JSONDecodeError:
         # Strip markdown fences if present
         clean = raw.replace("```json", "").replace("```", "").strip()
-        result = json.loads(clean)
+        try:
+            result = json.loads(clean)
+        except json.JSONDecodeError:
+            # Output was truncated — return a safe fallback so the pipeline
+            # doesn't crash. The reading still gets saved; judge just won't
+            # have complete data.
+            result = {
+                "claims": [],
+                "covered_themes": [],
+                "missed_themes": [],
+                "_parse_error": "judge output was truncated (max_tokens hit)",
+            }
 
     claims = result.get("claims", [])
     covered_themes = result.get("covered_themes", [])

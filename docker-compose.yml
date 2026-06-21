@@ -19,6 +19,7 @@ services:
     environment:
       DATABASE_URL: postgres://tarot:tarot@db:5432/tarot
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
     depends_on:
       - db
     volumes:

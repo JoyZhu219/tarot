@@ -9,3 +9,4 @@ fastembed>=0.2
 pydantic>=2.0
 langgraph>=0.2
 typing_extensions>=4.0
+openai-agents>=0.0.12

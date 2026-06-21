@@ -556,3 +556,31 @@ class LLMCostsView(APIView):
             return Response({"error": f"Invalid date format. Use YYYY-MM-DD. ({e})"}, status=400)
 
         return Response(result)
+
+
+class RecommendSpreadsView(APIView):
+    def post(self, request):
+        import asyncio
+        from .spread_agents import run_pre_reading_flow
+
+        user_input = request.data.get("question", "").strip()
+        if not user_input:
+            return Response({"error": "question is required"}, status=400)
+
+        try:
+            result = asyncio.run(run_pre_reading_flow(user_input))
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+        return Response({
+            "original_question": result.original_question,
+            "refined_question": result.refined_question,
+            "recommended_spreads": [
+                {
+                    "spread_key": r.spread_key,
+                    "spread_label": r.spread_label,
+                    "reason": r.reason,
+                }
+                for r in result.recommended_spreads
+            ],
+        })
