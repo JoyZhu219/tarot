@@ -57,23 +57,113 @@
     .rec-spread-reason { color: #8b7355; font-size: 0.8rem; line-height: 1.5; }
     .rec-spread-count { float: right; color: #5a3d7a; font-size: 0.75rem; }
 
-    /* face-down deck */
-    .deck-instruction { font-size: 0.85rem; color: #8b7355; margin-bottom: 1.25rem; font-style: italic; }
-    .deck-wrap { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
-    .card-slot { width: 72px; height: 120px; perspective: 600px; cursor: pointer; }
-    .card-slot.picked { cursor: default; }
-    .card-inner { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.55s ease; }
-    .card-slot.flipped .card-inner { transform: rotateY(180deg); }
-    .card-slot.reversed .card-inner { transform: rotateY(180deg) rotateZ(180deg); }
-    .card-face, .card-back { position: absolute; width: 100%; height: 100%; border-radius: 8px; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; }
-    .card-back { background: #1e1035; border: 1.5px solid #5a3d8a; font-size: 1.6rem; flex-direction: column; gap: 4px; }
-    .card-back-pattern { width: 52px; height: 88px; border: 1px solid #3a2d62; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #4a3472; }
-    .card-slot:not(.picked):hover .card-back { border-color: #c9a96e; background: #251540; }
-    .card-slot:not(.picked):hover .card-back-pattern { border-color: #c9a96e; color: #c9a96e; }
-    .card-face { background: #12082a; border: 1.5px solid #c9a96e; transform: rotateY(180deg); flex-direction: column; padding: 6px; text-align: center; }
-    .card-face .card-name { font-size: 0.62rem; color: #c9a96e; line-height: 1.3; font-weight: bold; }
-    .card-face .card-symbol { font-size: 1.5rem; margin: 4px 0; }
-    .card-face .card-suit { font-size: 0.55rem; color: #5a3d7a; text-transform: uppercase; letter-spacing: 1px; }
+    /* ── Shuffle animation stage ── */
+    .shuffle-stage {
+      position: relative; height: 160px; margin-bottom: 1.5rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .shuffle-card {
+      position: absolute;
+      width: 72px; height: 120px; border-radius: 8px;
+      background: #1e1035; border: 1.5px solid #5a3d8a;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.35s cubic-bezier(.4,0,.2,1), opacity 0.3s;
+      box-shadow: 0 4px 16px #0008;
+    }
+    .shuffle-card .back-pattern {
+      width: 52px; height: 88px; border: 1px solid #3a2d62; border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; color: #4a3472;
+    }
+    .shuffle-status {
+      text-align: center; color: #8b7355; font-style: italic; font-size: 0.85rem;
+      margin-bottom: 1rem; min-height: 1.2em;
+    }
+
+    /* ── Overlapping fan deck ── */
+    .fan-scroll {
+      overflow-x: auto;
+      padding: 1rem 1rem 1.5rem;
+      cursor: grab;
+    }
+    .fan-scroll:active { cursor: grabbing; }
+    .fan-row {
+      position: relative;
+      /* width set by JS based on card count */
+      height: 148px;
+      white-space: nowrap;
+    }
+    .fan-card {
+      position: absolute;
+      width: 72px; height: 130px;
+      border-radius: 8px;
+      background: #1e1035;
+      border: 1.5px solid #5a3d8a;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: transform 0.18s ease, border-color 0.15s, box-shadow 0.15s;
+      box-shadow: 2px 2px 6px #0005;
+      backface-visibility: hidden;
+    }
+    .fan-card .back-pat {
+      width: 52px; height: 96px;
+      border: 1px solid #3a2d62; border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; color: #4a3472;
+      pointer-events: none;
+    }
+    .fan-card:not(.picked):hover {
+      transform: translateY(-18px) !important;
+      border-color: #c9a96e;
+      box-shadow: 2px 8px 18px #0008;
+      z-index: 100 !important;
+    }
+    .fan-card:not(.picked):hover .back-pat {
+      color: #c9a96e; border-color: #c9a96e;
+    }
+    .fan-card.picked {
+      cursor: default;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    /* drawn cards row */
+    .drawn-row {
+      display: flex; flex-wrap: wrap; gap: 12px;
+      justify-content: center; margin-top: 1.25rem;
+    }
+    .drawn-card {
+      position: relative; width: 72px;
+      text-align: center;
+    }
+    .drawn-card-img {
+      width: 72px; height: 130px; border-radius: 8px;
+      object-fit: cover; border: 1.5px solid #c9a96e;
+      display: block;
+    }
+    .drawn-card-img.reversed { transform: rotate(180deg); }
+    .drawn-card-label {
+      font-size: 0.6rem; color: #8b7355; margin-top: 0.3rem;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .drawn-card-name {
+      font-size: 0.65rem; color: #c9a96e; margin-top: 0.1rem;
+    }
+    .drawn-card-rev {
+      font-size: 0.58rem; color: #c96e6e;
+    }
+    .drawn-card-remove {
+      position: absolute; top: -6px; right: -6px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #2d1f4a; border: 1px solid #5a3d7a;
+      color: #8b7355; font-size: 0.65rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .drawn-card-remove:hover { border-color: #c9a96e; color: #c9a96e; }
+
+    .card-slot { display: none; } /* unused now */
+    .deck-instruction { font-size: 0.85rem; color: #8b7355; margin-bottom: 0.5rem; font-style: italic; text-align: center; }
 
     /* tray */
     .selected-tray { margin-top: 1.5rem; }
@@ -132,12 +222,21 @@
 <!-- Step 3: Draw cards -->
 <div class="step" id="step3" style="display:none">
   <h2>3. Draw your cards</h2>
-  <p class="deck-instruction" id="deckInstruction"></p>
-  <div class="deck-wrap" id="deckWrap"></div>
-  <div class="selected-tray" id="selectedTray" style="display:none">
-    <div class="tray-label">Cards drawn so far:</div>
-    <div class="tray-cards" id="trayCards"></div>
+
+  <!-- Shuffle animation -->
+  <div class="shuffle-stage" id="shuffleStage"></div>
+  <div class="shuffle-status" id="shuffleStatus"></div>
+
+  <!-- Fan deck (shown after shuffle) -->
+  <div id="deckArea" style="display:none">
+    <p class="deck-instruction" id="deckInstruction"></p>
+    <div class="fan-scroll" id="fanScroll">
+      <div class="fan-row" id="deckWrap"></div>
+    </div>
+    <div class="drawn-row" id="drawnRow"></div>
   </div>
+
+  <div id="drawnRowOuter"></div>
 </div>
 
 <button class="submit-btn" id="submitBtn" onclick="submitReading()" disabled>Generate Reading</button>
@@ -146,6 +245,66 @@
 <script>
 const API = 'http://localhost:8000/api';
 const SUIT_SYMBOL = { wands: '🔥', cups: '🌊', swords: '💨', pentacles: '🌿', '': '✦' };
+
+// ---------------------------------------------------------------------------
+// Rider-Waite card images from Wikimedia Commons (public domain)
+// ---------------------------------------------------------------------------
+const CARD_IMAGES = {
+  "The Fool":"9/90/RWS_Tarot_00_Fool.jpg","The Magician":"d/de/RWS_Tarot_01_Magician.jpg",
+  "The High Priestess":"8/88/RWS_Tarot_02_High_Priestess.jpg","The Empress":"d/d2/RWS_Tarot_03_Empress.jpg",
+  "The Emperor":"c/c3/RWS_Tarot_04_Emperor.jpg","The Hierophant":"8/8d/RWS_Tarot_05_Hierophant.jpg",
+  "The Lovers":"d/db/RWS_Tarot_06_Lovers.jpg","The Chariot":"9/9b/RWS_Tarot_07_Chariot.jpg",
+  "Strength":"f/f5/RWS_Tarot_08_Strength.jpg","The Hermit":"4/4d/RWS_Tarot_09_Hermit.jpg",
+  "Wheel of Fortune":"3/3c/RWS_Tarot_10_Wheel_of_Fortune.jpg","Justice":"e/e0/RWS_Tarot_11_Justice.jpg",
+  "The Hanged Man":"2/2b/RWS_Tarot_12_Hanged_Man.jpg","Death":"d/d7/RWS_Tarot_13_Death.jpg",
+  "Temperance":"f/f8/RWS_Tarot_14_Temperance.jpg","The Devil":"5/55/RWS_Tarot_15_Devil.jpg",
+  "The Tower":"5/53/RWS_Tarot_16_Tower.jpg","The Star":"d/db/RWS_Tarot_17_Star.jpg",
+  "The Moon":"7/7f/RWS_Tarot_18_Moon.jpg","The Sun":"1/17/RWS_Tarot_19_Sun.jpg",
+  "Judgement":"d/dd/RWS_Tarot_20_Judgement.jpg","The World":"f/ff/RWS_Tarot_21_World.jpg",
+  "Ace of Wands":"1/11/Wands01.jpg","Two of Wands":"0/0f/Wands02.jpg",
+  "Three of Wands":"f/ff/Wands03.jpg","Four of Wands":"a/a4/Wands04.jpg",
+  "Five of Wands":"9/9d/Wands05.jpg","Six of Wands":"3/3b/Wands06.jpg",
+  "Seven of Wands":"e/e4/Wands07.jpg","Eight of Wands":"6/6b/Wands08.jpg",
+  "Nine of Wands":"e/e7/Wands09.jpg","Ten of Wands":"0/0b/Wands10.jpg",
+  "Page of Wands":"6/6a/Wands11.jpg","Knight of Wands":"1/16/Wands12.jpg",
+  "Queen of Wands":"0/0d/Wands13.jpg","King of Wands":"c/ce/Wands14.jpg",
+  "Ace of Cups":"3/36/Cups01.jpg","Two of Cups":"f/f8/Cups02.jpg",
+  "Three of Cups":"7/7a/Cups03.jpg","Four of Cups":"3/35/Cups04.jpg",
+  "Five of Cups":"d/d7/Cups05.jpg","Six of Cups":"1/17/Cups06.jpg",
+  "Seven of Cups":"a/ae/Cups07.jpg","Eight of Cups":"6/60/Cups08.jpg",
+  "Nine of Cups":"2/24/Cups09.jpg","Ten of Cups":"8/84/Cups10.jpg",
+  "Page of Cups":"a/ad/Cups11.jpg","Knight of Cups":"f/fa/Cups12.jpg",
+  "Queen of Cups":"6/62/Cups13.jpg","King of Cups":"0/04/Cups14.jpg",
+  "Ace of Swords":"1/1a/Swords01.jpg","Two of Swords":"9/9e/Swords02.jpg",
+  "Three of Swords":"0/02/Swords03.jpg","Four of Swords":"b/bf/Swords04.jpg",
+  "Five of Swords":"2/23/Swords05.jpg","Six of Swords":"2/29/Swords06.jpg",
+  "Seven of Swords":"3/34/Swords07.jpg","Eight of Swords":"a/a7/Swords08.jpg",
+  "Nine of Swords":"2/2f/Swords09.jpg","Ten of Swords":"d/d4/Swords10.jpg",
+  "Page of Swords":"4/4c/Swords11.jpg","Knight of Swords":"b/b0/Swords12.jpg",
+  "Queen of Swords":"d/d4/Swords13.jpg","King of Swords":"3/33/Swords14.jpg",
+  "Ace of Pentacles":"f/fd/Pents01.jpg","Two of Pentacles":"9/9f/Pents02.jpg",
+  "Three of Pentacles":"4/42/Pents03.jpg","Four of Pentacles":"3/35/Pents04.jpg",
+  "Five of Pentacles":"9/96/Pents05.jpg","Six of Pentacles":"a/a6/Pents06.jpg",
+  "Seven of Pentacles":"6/6a/Pents07.jpg","Eight of Pentacles":"4/49/Pents08.jpg",
+  "Nine of Pentacles":"f/f0/Pents09.jpg","Ten of Pentacles":"4/42/Pents10.jpg",
+  "Page of Pentacles":"e/ec/Pents11.jpg","Knight of Pentacles":"d/d5/Pents12.jpg",
+  "Queen of Pentacles":"8/88/Pents13.jpg","King of Pentacles":"1/1c/Pents14.jpg",
+};
+const WIKI = "https://upload.wikimedia.org/wikipedia/commons/thumb/";
+function cardImageUrl(name) {
+  const p = CARD_IMAGES[name];
+  if (!p) return null;
+  const filename = p.split("/").pop();
+  // Prefer local file (no hotlink issues), fallback to Wikimedia
+  return `cards/${filename}`;
+}
+
+// Called when an image fails to load — show card name as fallback text
+function onCardImgError(img, name) {
+  const face = img.parentElement;
+  face.innerHTML = `<div style="font-size:0.52rem;color:#c9a96e;padding:4px;text-align:center;line-height:1.4">${name}</div>`;
+  console.warn("Image failed to load:", name, img.src);
+}
 
 let allCards = [];
 let spreads = [];
@@ -270,22 +429,96 @@ async function fetchSpreadAndProceed(key) {
   selectedSpread = spread;
   selectedCards = [];
   shuffleDeck();
-  renderDeck();
 
   const step3 = document.getElementById('step3');
   step3.style.display = 'block';
   updateSubmitBtn();
   step3.scrollIntoView({ behavior: 'smooth' });
+
+  // Small delay so scroll finishes before animation starts
+  await delay(300);
+  animateShuffleAndDeal();
 }
 
 // ---------------------------------------------------------------------------
-// Step 3: Card drawing (unchanged)
+// Step 3: Shuffle animation + linear card row
 // ---------------------------------------------------------------------------
 function shuffleDeck() {
   shuffledDeck = [...allCards].sort(() => Math.random() - 0.5).map((c, i) => ({
     ...c, slotIndex: i, is_reversed: Math.random() < 0.3,
   }));
 }
+
+async function animateShuffleAndDeal() {
+  const stage = document.getElementById('shuffleStage');
+  const status = document.getElementById('shuffleStatus');
+  const deckArea = document.getElementById('deckArea');
+
+  stage.style.display = 'flex';
+  deckArea.style.display = 'none';
+  stage.innerHTML = '';
+
+  // Build a visual stack of ~7 cards in the centre
+  const STACK = 7;
+  for (let i = 0; i < STACK; i++) {
+    const el = document.createElement('div');
+    el.className = 'shuffle-card';
+    el.style.transform = `translate(${(i - 3) * 2}px, ${(i - 3) * 1}px) rotate(${(i - 3) * 0.5}deg)`;
+    el.style.zIndex = i;
+    el.innerHTML = '<div class="back-pattern">✦</div>';
+    stage.appendChild(el);
+  }
+
+  const cards = stage.querySelectorAll('.shuffle-card');
+
+  // --- Riffle passes ---
+  const PASSES = 3;
+  for (let pass = 0; pass < PASSES; pass++) {
+    status.textContent = pass === 0 ? 'Shuffling the deck…'
+                       : pass === 1 ? 'Cutting the cards…'
+                       : 'One more time…';
+
+    for (let i = 0; i < STACK; i++) {
+      await delay(60);
+      const card = cards[i];
+      const dir = (i % 2 === 0) ? 1 : -1;
+      card.style.transform = `translate(${dir * 80}px, ${Math.random() * 20 - 10}px) rotate(${dir * (Math.random() * 15 + 5)}deg)`;
+    }
+    await delay(320);
+
+    // Return to stack
+    for (let i = 0; i < STACK; i++) {
+      await delay(40);
+      const card = cards[i];
+      card.style.transform = `translate(${(i - 3) * 2}px, ${(i - 3) * 1}px) rotate(${(Math.random() - 0.5) * 4}deg)`;
+    }
+    await delay(300);
+  }
+
+  // --- Fan out ---
+  status.textContent = 'The deck is ready — choose your cards.';
+  const total = STACK;
+  for (let i = 0; i < total; i++) {
+    await delay(30);
+    const spread = (i / (total - 1) - 0.5) * 260;
+    const rot = (i / (total - 1) - 0.5) * 20;
+    cards[i].style.transform = `translateX(${spread}px) rotate(${rot}deg)`;
+  }
+  await delay(600);
+
+  // Fade out stage, show the deck
+  stage.style.opacity = '0';
+  stage.style.transition = 'opacity 0.4s';
+  await delay(400);
+  stage.style.display = 'none';
+  stage.style.opacity = '';
+  stage.style.transition = '';
+
+  deckArea.style.display = 'block';
+  renderDeck();
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function getPositions(key) {
   const map = {
@@ -298,61 +531,70 @@ function getPositions(key) {
   return map[key] || [];
 }
 
+const CARD_W = 72;
+const OVERLAP = 24;
+const STEP = CARD_W - OVERLAP;
+
 function renderDeck() {
   const needed = selectedSpread.card_count;
   document.getElementById('deckInstruction').textContent =
-    `The cards are face down and shuffled. Choose ${needed} that call to you — trust your intuition.`;
+    `The cards are spread before you. Choose ${needed} — hover to peek, click to draw.`;
 
   const wrap = document.getElementById('deckWrap');
+  const totalWidth = STEP * (shuffledDeck.length - 1) + CARD_W;
+  wrap.style.width = totalWidth + 'px';
+
   wrap.innerHTML = shuffledDeck.map((c, i) => `
-    <div class="card-slot" id="slot-${i}" onclick="pickCard(${i})">
-      <div class="card-inner">
-        <div class="card-back"><div class="card-back-pattern">✦</div></div>
-        <div class="card-face">
-          <div class="card-symbol">${SUIT_SYMBOL[c.suit] || '✦'}</div>
-          <div class="card-name">${c.name}</div>
-          <div class="card-suit">${c.arcana === 'major' ? 'Major Arcana' : c.suit}</div>
-        </div>
-      </div>
+    <div class="fan-card" id="fan-${i}"
+         style="left:${i * STEP}px; z-index:${i}"
+         onclick="pickFanCard(${i})">
+      <div class="back-pat">✦</div>
     </div>`).join('');
+
+  document.getElementById('drawnRow').innerHTML = '';
 }
 
-function pickCard(slotIndex) {
-  const card = shuffledDeck[slotIndex];
-  const slot = document.getElementById('slot-' + slotIndex);
-  if (slot.classList.contains('picked')) return;
+function pickFanCard(i) {
   if (selectedCards.length >= selectedSpread.card_count) return;
-  slot.classList.add('picked');
-  slot.classList.add(card.is_reversed ? 'reversed' : 'flipped');
-  selectedCards.push({ card_id: card.id, card_name: card.name, is_reversed: card.is_reversed, slot_index: slotIndex });
-  renderTray();
+  const el = document.getElementById('fan-' + i);
+  if (!el || el.classList.contains('picked')) return;
+  const card = shuffledDeck[i];
+  el.classList.add('picked');
+  selectedCards.push({ card_id: card.id, card_name: card.name, is_reversed: card.is_reversed, fan_index: i });
+  renderDrawnCards();
   updateSubmitBtn();
 }
 
-function unpickCard(slotIndex) {
-  const idx = selectedCards.findIndex(c => c.slot_index === slotIndex);
-  if (idx < 0) return;
-  selectedCards.splice(idx, 1);
-  const slot = document.getElementById('slot-' + slotIndex);
-  slot.classList.remove('picked', 'flipped', 'reversed');
-  renderTray();
-  updateSubmitBtn();
-}
-
-function renderTray() {
-  const tray = document.getElementById('selectedTray');
-  const trayCards = document.getElementById('trayCards');
-  if (selectedCards.length === 0) { tray.style.display = 'none'; return; }
-  tray.style.display = 'block';
+function renderDrawnCards() {
   const positions = getPositions(selectedSpread.key);
-  trayCards.innerHTML = selectedCards.map((c, i) => `
-    <div class="tray-card">
-      <span class="pos-label">${positions[i] || (i + 1)}:</span>
-      <span>${c.card_name}</span>
-      ${c.is_reversed ? '<span class="rev-badge">↩ reversed</span>' : ''}
-      <button class="remove-x" onclick="unpickCard(${c.slot_index})">✕</button>
-    </div>`).join('');
+  const row = document.getElementById('drawnRow');
+  row.innerHTML = selectedCards.map((c, i) => {
+    const imgUrl = cardImageUrl(c.card_name);
+    const imgHtml = imgUrl
+      ? `<img class="drawn-card-img${c.is_reversed ? ' reversed' : ''}" src="${imgUrl}" alt="${c.card_name}" onerror="this.style.display='none'">`
+      : `<div style="width:72px;height:130px;border:1.5px solid #c9a96e;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.55rem;color:#c9a96e;text-align:center;padding:3px">${c.card_name}</div>`;
+    return `
+      <div class="drawn-card">
+        <button class="drawn-card-remove" onclick="undrawFanCard(${i})">✕</button>
+        ${imgHtml}
+        <div class="drawn-card-label">${positions[i] || (i + 1)}</div>
+        <div class="drawn-card-name">${c.card_name}</div>
+        ${c.is_reversed ? '<div class="drawn-card-rev">↩ reversed</div>' : ''}
+      </div>`;
+  }).join('');
 }
+
+function undrawFanCard(idx) {
+  const removed = selectedCards.splice(idx, 1)[0];
+  const el = document.getElementById('fan-' + removed.fan_index);
+  if (el) el.classList.remove('picked');
+  renderDrawnCards();
+  updateSubmitBtn();
+}
+
+function pickCard() {}
+function unpickCard() {}
+function renderTray() {}
 
 function updateSubmitBtn() {
   const ready = selectedSpread &&
