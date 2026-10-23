@@ -1,5 +1,5 @@
 Django==1.11.27
-djangorestframework==3.14
+djangorestframework==3.18.2
 django-cors-headers==4.3
 psycopg2-binary==2.9.9
 anthropic>=0.40.0
